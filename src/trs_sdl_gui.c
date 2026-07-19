@@ -49,6 +49,7 @@
 #include "trs_hard.h"
 #include "trs_memory.h"
 #include "trs_mkdisk.h"
+#include "trs_omti.h"
 #include "trs_sdl_gui.h"
 #include "trs_sdl_keyboard.h"
 #include "trs_state_save.h"
@@ -938,6 +939,9 @@ int gui_menu(const char *title, const MENU *entry, int selection)
             case HARD_DRIVE:
               trs_hard_remove(selection);
               break;
+            case OMTI_DRIVE:
+              trs_omti_remove(selection - TRS_HARD_MAXDRIVES);
+              break;
             case WAFER:
               stringy_remove(selection);
               break;
@@ -965,6 +969,12 @@ int gui_menu(const char *title, const MENU *entry, int selection)
                   trs_hard_getfilename(selection) : trs_hard_dir,
                   filename, HDV, 0, "Hard Disk Image") >= 0)
                 trs_hard_attach(selection, filename);
+              break;
+            case OMTI_DRIVE:
+              if (gui_file(trs_omti_getfilename(selection - TRS_HARD_MAXDRIVES)[0] ?
+                  trs_omti_getfilename(selection - TRS_HARD_MAXDRIVES) : trs_hard_dir,
+                  filename, HDV, 0, "OMTI Hard Disk Image") >= 0)
+                trs_omti_attach(selection - TRS_HARD_MAXDRIVES, filename);
               break;
             case WAFER:
               if (gui_file(stringy_get_name(selection)[0] ?
@@ -998,7 +1008,7 @@ int gui_menu(const char *title, const MENU *entry, int selection)
       }
     }
 
-    if (entry[selection].type == HARD_DRIVE)
+    if (entry[selection].type == HARD_DRIVE || entry[selection].type == OMTI_DRIVE)
       return selection; /* Update Hard Disk Geometry */
   }
 }
@@ -1421,6 +1431,8 @@ void gui_hard_menu(void)
    {" 1: ", HARD_DRIVE},
    {" 2: ", HARD_DRIVE},
    {" 3: ", HARD_DRIVE},
+   {" omti0: ", OMTI_DRIVE},
+   {" omti1: ", OMTI_DRIVE},
    {"", TITLE},
    {"Save Disk Set", SAVE_SET},
    {"Load Disk Set", LOAD_SET},
@@ -1446,19 +1458,25 @@ void gui_hard_menu(void)
       gui_limit(trs_hard_getfilename(i), &menu[i].text[4], 56);
       menu[i].text[0] = trs_hard_getwriteprotect(i) ? '*' : ' ';
     }
+    for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
+      gui_limit(trs_omti_getfilename(i), &menu[4 + i].text[8], 52);
+      menu[4 + i].text[0] = trs_omti_getwriteprotect(i) ? '*' : ' ';
+    }
 
     if (selection < 4)
       trs_hard_getgeometry(selection, &cylinders, &heads, &sectors);
+    else if (selection < 4 + TRS_OMTI_MAXDRIVES)
+      trs_omti_getgeometry(selection - 4, &cylinders, &heads, &sectors);
 
-    snprintf(&menu[8].text[55], 6, "%5d", cylinders);
-    snprintf(&menu[9].text[57], 4, "%3d", heads);
-    snprintf(&menu[10].text[57], 4, "%3d", sectors);
-    snprintf(&menu[11].text[55], 6, "%s", drives[drive]);
+    snprintf(&menu[10].text[55], 6, "%5d", cylinders);
+    snprintf(&menu[11].text[57], 4, "%3d", heads);
+    snprintf(&menu[12].text[57], 4, "%3d", sectors);
+    snprintf(&menu[13].text[55], 6, "%s", drives[drive]);
     gui_clear();
 
     selection = gui_menu(" Hard Disk Management ", menu, selection);
     switch (selection) {
-      case 8:
+      case 10:
         snprintf(input, 5, "%d", cylinders);
         if (gui_input(" Enter Cylinder Count ", input, input, 4, 0) > 0) {
           value = atoi(input);
@@ -1473,7 +1491,7 @@ void gui_hard_menu(void)
           }
         }
         break;
-      case 9:
+      case 11:
         snprintf(input, 2, "%d", heads);
         if (gui_input(" Enter Head Count ", input, input, 1, 0) > 0) {
           value = atoi(input);
@@ -1485,7 +1503,7 @@ void gui_hard_menu(void)
           }
         }
         break;
-      case 10:
+      case 12:
         snprintf(input, 4, "%d", sectors);
         if (gui_input(" Enter Sector Count ", input, input, 3, 0) > 0) {
           value = atoi(input);
@@ -1497,10 +1515,10 @@ void gui_hard_menu(void)
           }
         }
         break;
-      case 11:
+      case 13:
         drive = gui_popup("Drive", drives, 5, drive);
         break;
-      case 12:
+      case 14:
         filename[0] = 0;
         if (gui_input(" Enter Filename for Hard Disk Image ",
             trs_hard_dir, filename, FILENAME_MAX, 1) > 0) {

@@ -33,6 +33,7 @@
 #define HARD_DRIVE  2
 #define WAFER       3
 #define CASSETTE    4
+#define OMTI_DRIVE  9
 
 extern int trs_write_protect(int type, int drive);
 extern int trs_create_blank_jv1(const char *fname);
