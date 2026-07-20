@@ -3,6 +3,7 @@
 # Running sdltrsOMTI with a working OMTI hard disk
 
 Usage guide. For the controller protocol, see `OMTI_CONTROLLER.md`. For the debugging history behind these choices, see `DEBUG.md`.
+![alt text](image.png)
 
 ## 1. Build
 
@@ -10,27 +11,28 @@ Usage guide. For the controller protocol, see `OMTI_CONTROLLER.md`. For the debu
 mkdir -p build && cd build && cmake .. && cmake --build .
 ```
 
-The binary is `build/sdl2trs`. Rebuild after any change under `src/` (`cmake --build build` from the repo root).
+The binary is `build/sdl2trs`. Rebuild after any change under `src/` (`cmake --build build` from the repo root). sdltrs2 for MacOS has the function to rezize the window.
 
 ## 2. Which `.hdv` to use
 
-Use `HDV/g3s-omti-WORKING.hdv`. It is the only correct and complete OMTI image in `HDV/`:
+Use `HDV/g3s-omti-WORKING.hdv`. It is the only correct and complete OMTI image in `HDV/`(rest might be just testing):
 
 - Full 615-cylinder / 21.4 MB size, which the D: partition needs
 - Boots directly from the raw hard-disk EPROM with no floppy attached
 - Both C: and D: are valid, clean CP/M partitions
 
-One `.hdv` is one physical drive holding two logical CP/M drives, C: and D:. You attach it once at `-omti0`; there is no separate file or slot for D:. The OMTI controller has no notion of C: or D:, so to the emulated hardware `-omti0` is a single flat block device. The split lives in the guest CP/M BIOS: `DISKIO1.MAC` (`DPBHD1`/`DPBHD2`) reads and writes the one image at two cylinder offsets, C: from cylinder 2 and D: from cylinder 307, where C: ends. The 1990s hardware worked the same way: one physical Seagate ST225 partitioned in software.
+One `.hdv` is one physical drive holding two logical CP/M drives, C: and D:. You attach it once at `-omti0`; there is no separate file or slot for D:. The OMTI controller has no notion of C: or D:, so to the emulated hardware `-omti0` is a single flat block device. The split lives in the guest CP/M BIOS: `DISKIO1.MAC` (`DPBHD1`/`DPBHD2`) reads and writes the one image at two cylinder offsets, C: from cylinder 2 and D: from cylinder 307, where C: ends. The 1990s hardware worked the same way: one physical Seagate ST225 partitioned in software. The message about 
 
 The other images in `HDV/g3s-omti-*.hdv` (`fixed`, `fixed2`–`fixed5`, `real`, `real2`, `st225`, `612-2h`, `d`, `fresh`, `formatted`, `handbuilt`, `handbuilt2`) are throwaway intermediates from that debugging work and can be deleted. (`g3s-hard21-f1.hdv` / `f2.hdv` are unrelated WD1000 test images, not OMTI.)
 
-`g3s-omti-WORKING.hdv` is a live disk, not a template. Files you write to it (below) persist. To keep a pristine copy, back it up now:
+`g3s-omti-WORKING.hdv` is a live disk, not a template. Files you write to it (below) persist. To keep a pristine copy, back it up
 
 ```sh
 cp HDV/g3s-omti-WORKING.hdv HDV/g3s-omti-WORKING.backup.hdv
 ```
 
 To build a fresh one from scratch, see the docstring in `dmk-working/build_working_hdv.py` — a scripted, reproducible recipe that works around a bug in the original `COPYSYS.COM` (see `DEBUG.md`).
+I needed to do this 
 
 ## 3. One-click launch
 
