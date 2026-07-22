@@ -1,6 +1,6 @@
 build/
 HDV/
 src ST 225/
-# dmk-working/
+dmk-working/
 .DS_Store
 sdl2trs-omti.command
