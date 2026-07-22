@@ -1,25 +1,17 @@
 #!/bin/bash
-# Same as boot_gdos24_xebec.command, but with the zbx debugger enabled so
-# you can freeze execution at an exact moment and inspect memory/registers.
+# Debug/tracing variant of boot_gdos24_xebec.command: every run logs full
+# port-level I/O tracing (every Z80 IN/OUT plus the OMTI/Xebec-specific
+# debug output) to logs/, and the zbx debugger is enabled.
 #
-# HOW TO USE:
-#   1. Double-click this. It starts in FULLSCREEN automatically (needed for
-#      the debugger hotkey to work at all -- see below).
-#   2. Boot to the GDOS prompt as usual, and type PD 5 like before -- let
-#      it finish and show "Bauteil nicht erreichbar" as normal.
-#   3. THEN press F9. This does NOT freeze the graphics window by itself --
-#      it drops the TERMINAL WINDOW (the one showing this script's text
-#      output, not the emulator graphics) into a "(zbx)" debugger prompt.
-#      Switch to that Terminal window to see it. The graphics window will
-#      look frozen/unresponsive while you're in the debugger -- that's
-#      expected, not a hang.
-#   4. In the Terminal, type exactly these three lines (one at a time):
-#        dis 4408,4410
-#        dis 5992,599a
-#        p
-#   5. Paste me everything the Terminal shows from those three commands.
-#      That's the two memory locations gating the drive-table write, plus
-#      full register state, as they stand right after PD 5 finished.
+# Use this instead of the plain script when investigating a problem: do
+# whatever fails on screen, then the log in logs/ has the complete port
+# conversation for cross-checking afterward.
+#
+# zbx notes: the F9 hotkey to break in does not work on this Mac, but zbx
+# is fully scriptable instead -- run this repo's build by hand with
+# "-zbx < script.txt" where the script contains commands like
+# "stop f1bb" / "go" / "pe f000,f7ff" / "dis f100,f260" / "quit".
+# Breakpoints set that way fire without any keyboard interaction.
 #
 # Every disk/hard/omti/xebec slot is passed explicitly (empty string to
 # clear) so this never boots whatever was last left in ~/.sdltrs.t8c.
@@ -53,10 +45,9 @@ mkdir -p "$LOG_DIR"
 echo "Logging to: $LOG_FILE"
 echo
 echo "=============================================================="
-echo "  Boot to the GDOS prompt, THEN press F9 and switch to THIS"
-echo "  Terminal window (not the graphics window) for the (zbx)"
-echo "  prompt. See the comment block at the top of this script for"
-echo "  the exact commands to type."
+echo "  Debug run: full port-level I/O tracing is being logged to"
+echo "  the file above. Do whatever you want to investigate, quit,"
+echo "  then check the log in logs/."
 echo "=============================================================="
 echo
 
