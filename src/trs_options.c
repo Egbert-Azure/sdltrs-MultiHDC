@@ -36,7 +36,9 @@
 #include "trs_cassette.h"
 #include "trs_disk.h"
 #include "trs_hard.h"
+#include "trs_hdctl.h"
 #include "trs_memory.h"
+#include "trs_mkdisk.h"
 #include "trs_omti.h"
 #include "trs_sdl_gui.h"
 #include "trs_sdl_keyboard.h"
@@ -110,6 +112,7 @@ static void opt_doublestep(const char *arg, int intarg, int *stringarg);
 static void opt_stepmap(const char *arg, int intarg, int *stringarg);
 #endif
 static void opt_file(const char *arg, int intarg, int *stringarg);
+static void opt_hardctl(const char *arg, int intarg, int *variable);
 static void opt_hexval(const char *arg, int intarg, int *variable);
 static void opt_intval(const char *arg, int intarg, int *variable);
 static void opt_joybuttonmap(const char *arg, int intarg, int *stringarg);
@@ -216,8 +219,13 @@ static const struct {
   { "halt",            opt_value,         1, 0, &Z80_HALT             },
   { "h0",              opt_file,          1, 0, "h"                   },
   { "h1",              opt_file,          1, 1, "h"                   },
+  { "h2",              opt_file,          1, 2, "h"                   },
+  { "h3",              opt_file,          1, 3, "h"                   },
   { "hard0",           opt_file,          1, 0, "h"                   },
   { "hard1",           opt_file,          1, 1, "h"                   },
+  { "hard2",           opt_file,          1, 2, "h"                   },
+  { "hard3",           opt_file,          1, 3, "h"                   },
+  { "hardcontroller",  opt_hardctl,       1, 0, NULL                  },
   { "harddir",         opt_dirname,       1, 0, trs_hard_dir          },
   { "hd",              opt_dirname,       1, 0, trs_hard_dir          },
   { "hdboot",          opt_value,         0, 1, &trs_hd_boot          },
@@ -311,7 +319,9 @@ static const struct {
   { "noxmem",          opt_value,         0, 0, &xmem80               },
   { "noxmem80",        opt_value,         0, 0, &xmem80               },
   { "o0",              opt_file,          1, 0, "o"                   },
+  { "o1",              opt_file,          1, 1, "o"                   },
   { "omti0",           opt_file,          1, 0, "o"                   },
+  { "omti1",           opt_file,          1, 1, "o"                   },
   { "pause",           opt_value,         0, 1, &trs_paused           },
   { "p",               opt_printer,       1, 0, NULL                  },
   { "pd",              opt_dirname,       1, 0, trs_printer_dir       },
@@ -389,7 +399,9 @@ static const struct {
   { "wafer7",          opt_file,          1, 7, "w"                   },
   { "window",          opt_window,        1, 0, NULL                  },
   { "x0",              opt_file,          1, 0, "x"                   },
+  { "x1",              opt_file,          1, 1, "x"                   },
   { "xebec0",          opt_file,          1, 0, "x"                   },
+  { "xebec1",          opt_file,          1, 1, "x"                   },
   { "xmem",            opt_memory,        0, 7, &xmem80               },
   { "xmem80",          opt_memory,        0, 7, &xmem80               },
   { "y",               opt_intval,        1, 7, NULL                  },
@@ -534,6 +546,21 @@ static void opt_clock(const char *arg, int intarg, int *stringarg)
         clock_mhz_4 = clock_mhz;
     }
   }
+}
+
+static void opt_hardctl(const char *arg, int intarg, int *variable)
+{
+  (void)intarg;
+  (void)variable;
+
+  if (strcasecmp(arg, "omti") == 0)
+    hdctl_set_active(OMTI_DRIVE);
+  else if (strcasecmp(arg, "xebec") == 0)
+    hdctl_set_active(XEBEC_DRIVE);
+  else if (strcasecmp(arg, "wd1000") == 0 || strcasecmp(arg, "wd") == 0)
+    hdctl_set_active(HARD_DRIVE);
+  else
+    error("unknown hardcontroller '%s' (use wd1000, omti or xebec)", arg);
 }
 
 static void opt_dirname(const char *arg, int intarg, int *stringarg)
@@ -1142,6 +1169,9 @@ int trs_write_config_file(const char *filename)
   for (i = 0; i < TRS_HARD_MAXDRIVES; i++)
     fprintf(config_file, "hard%d\t\t= %s\n", i, trs_hard_getfilename(i));
 
+  fprintf(config_file, "hardcontroller\t= %s\n",
+      hdctl_get_active() == OMTI_DRIVE  ? "omti"  :
+      hdctl_get_active() == XEBEC_DRIVE ? "xebec" : "wd1000");
   fprintf(config_file, "harddir\t\t= %s\n", trs_hard_dir);
   fprintf(config_file, "%shdboot\n", option(trs_hd_boot));
 
