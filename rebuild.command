@@ -1,8 +1,8 @@
 #!/bin/bash
 # Double-click this in Finder (or run from a terminal) to (re)compile this
-# repo's own sdl2trs into build/sdl2trs. This build is fully isolated to
-# this repository -- nothing is installed system-wide, and the other
-# sdltrs checkouts (sdltrsOMTI etc.) are untouched.
+# sdltrs-MultiHDC checkout's own sdl2trs into build/sdl2trs. This build is
+# fully isolated to this repository -- nothing is installed system-wide, and
+# any other sdltrs checkouts you have are untouched.
 #
 # After a successful build, test with:
 #   boot_gdos24_xebec.command        -- boot GDOS 2.4 with the Xebec disk
