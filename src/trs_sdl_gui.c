@@ -46,6 +46,7 @@
 #include "trs.h"
 #include "trs_cassette.h"
 #include "trs_disk.h"
+#include "trs_clones.h"
 #include "trs_hard.h"
 #include "trs_hdctl.h"
 #include "trs_memory.h"
@@ -75,7 +76,7 @@ static int filelistsize;
 
 typedef struct menu_entry {
   char text[64];
-  int const type;
+  int type;
 } MENU;
 
 static const char *drives[] = {
@@ -1455,74 +1456,94 @@ void gui_disk_menu(void)
 
 void gui_hard_menu(void)
 {
-  /* Hard-disk drive slots, in menu-row order.  coloff is the column in
-     the row text where the filename is written (after the label); target
-     is the label shown in the "Insert into Drive" popup.  The menu[]
-     drive rows below must match this table row-for-row. */
-  static const struct {
-    int type;
-    int coloff;
-    const char *target;
-  } slot[] = {
-    { HARD_DRIVE,  4, "     0" },
-    { HARD_DRIVE,  4, "     1" },
-    { OMTI_DRIVE,  8, " omti0" },
-    { XEBEC_DRIVE, 9, "xebec0" },
-  };
-  int const nslots = (int)(sizeof(slot) / sizeof(slot[0]));
-  const char *targets[1 + (int)(sizeof(slot) / sizeof(slot[0]))];
-
-  MENU menu[] =
-  {{" 0: ", HARD_DRIVE},
-   {" 1: ", HARD_DRIVE},
-   {" omti0: ", OMTI_DRIVE},
-   {" xebec0: ", XEBEC_DRIVE},
-   {"", TITLE},
-   {"Save Disk Set", SAVE_SET},
-   {"Load Disk Set", LOAD_SET},
-   {"", TITLE},
-   {"Cylinder Count                                           ", ENTRY},
-   {"Head Count                                               ", ENTRY},
-   {"Sector Count                                             ", ENTRY},
-   {"Insert Created Hard Disk Image Into Drive                ", ENTRY},
-   {"Create Hard Disk Image with Above Parameters", ENTRY},
-   {"", 0}};
-  static int drive;
+  /* The three controllers a Genie IIIs can be fitted with, in popup order. */
+  static const char *ctrl_names[] = { "WD1000", "OMTI", "Xebec" };
+  static const int   ctrl_types[] = { HARD_DRIVE, OMTI_DRIVE, XEBEC_DRIVE };
+  int const genie3s = (trs_clones.model == GENIE3S);
+  static int drive;   /* "Insert into Drive" target: 0 = None, 1..nslots */
   int cylinders = 202;
   int heads     = 0;
   int sectors   = 256;
   int selection = 0;
-  int i;
-
-  /* "Insert into Drive" popup targets: None, then every hard slot. */
-  targets[0] = "  None";
-  for (i = 0; i < nslots; i++)
-    targets[i + 1] = slot[i].target;
 
   while (1) {
+    /* Only one controller is fitted at a time; show its slots.  On non-
+       GENIE3S machines the controller is always the WD1000. */
+    int const active = genie3s ? hdctl_get_active() : HARD_DRIVE;
+    int const nslots = hdctl_maxdrives(active);
+    MENU menu[16];
+    const char *targets[1 + 4];
     char input[5];
-    int  value;
+    int  n = 0, i, value;
+    int  ctrl_row = -1, cyl_row, head_row, sec_row, insert_row, create_row;
 
+    /* Pre-fill the geometry fields from the highlighted drive, if any. */
+    if (selection < nslots)
+      hdctl_getgeometry(active, selection, &cylinders, &heads, &sectors);
+
+    /* Drive-slot rows, all of the active controller's type. */
     for (i = 0; i < nslots; i++) {
-      int const unit = hard_unit_index(menu, i);
+      snprintf(menu[n].text, sizeof(menu[n].text), " %d: ", i);
+      gui_limit(hdctl_getfilename(active, i), &menu[n].text[4], 56);
+      menu[n].text[0] = hdctl_getwriteprotect(active, i) ? '*' : ' ';
+      menu[n].type = active;
+      n++;
+    }
+    menu[n].text[0] = 0; menu[n].type = TITLE; n++;
 
-      gui_limit(hdctl_getfilename(menu[i].type, unit),
-                &menu[i].text[slot[i].coloff], 60 - slot[i].coloff);
-      menu[i].text[0] = hdctl_getwriteprotect(menu[i].type, unit) ? '*' : ' ';
+    if (genie3s) {
+      snprintf(menu[n].text, sizeof(menu[n].text), "%-60s", "Controller");
+      for (i = 0; i < 3; i++)
+        if (ctrl_types[i] == active)
+          snprintf(&menu[n].text[53], 7, "%6s", ctrl_names[i]);
+      menu[n].type = ENTRY;
+      ctrl_row = n++;
     }
 
-    if (selection < nslots)
-      hdctl_getgeometry(menu[selection].type, hard_unit_index(menu, selection),
-          &cylinders, &heads, &sectors);
+    snprintf(menu[n].text, sizeof(menu[n].text), "%s", "Save Disk Set");
+    menu[n].type = SAVE_SET; n++;
+    snprintf(menu[n].text, sizeof(menu[n].text), "%s", "Load Disk Set");
+    menu[n].type = LOAD_SET; n++;
+    menu[n].text[0] = 0; menu[n].type = TITLE; n++;
 
-    snprintf(&menu[nslots + 4].text[55], 6, "%5d", cylinders);
-    snprintf(&menu[nslots + 5].text[57], 4, "%3d", heads);
-    snprintf(&menu[nslots + 6].text[57], 4, "%3d", sectors);
-    snprintf(&menu[nslots + 7].text[55], 7, "%6s", targets[drive]);
+    snprintf(menu[n].text, sizeof(menu[n].text), "%-60s", "Cylinder Count");
+    snprintf(&menu[n].text[55], 6, "%5d", cylinders);
+    menu[n].type = ENTRY; cyl_row = n++;
+    snprintf(menu[n].text, sizeof(menu[n].text), "%-60s", "Head Count");
+    snprintf(&menu[n].text[57], 4, "%3d", heads);
+    menu[n].type = ENTRY; head_row = n++;
+    snprintf(menu[n].text, sizeof(menu[n].text), "%-60s", "Sector Count");
+    snprintf(&menu[n].text[57], 4, "%3d", sectors);
+    menu[n].type = ENTRY; sec_row = n++;
+
+    if (drive > nslots) drive = 0;   /* clamp if the controller changed */
+    targets[0] = "  None";
+    for (i = 0; i < nslots; i++) {
+      static char lbl[4][8];
+      snprintf(lbl[i], sizeof(lbl[i]), "%6d", i);
+      targets[i + 1] = lbl[i];
+    }
+    snprintf(menu[n].text, sizeof(menu[n].text), "%-60s",
+             "Insert Created Hard Disk Image Into Drive");
+    snprintf(&menu[n].text[53], 7, "%6s", targets[drive]);
+    menu[n].type = ENTRY; insert_row = n++;
+    snprintf(menu[n].text, sizeof(menu[n].text), "%s",
+             "Create Hard Disk Image with Above Parameters");
+    menu[n].type = ENTRY; create_row = n++;
+
+    menu[n].text[0] = 0; menu[n].type = 0; /* terminator */
+
     gui_clear();
-
     selection = gui_menu(" Hard Disk Management ", menu, selection);
-    if (selection == nslots + 4) {
+
+    if (selection == ctrl_row) {
+      int cur = 0;
+      for (i = 0; i < 3; i++)
+        if (ctrl_types[i] == active) cur = i;
+      cur = gui_popup("Controller", ctrl_names, 3, cur);
+      hdctl_set_active(ctrl_types[cur]);
+      if (selection > 0) selection = 0;   /* row layout may shrink */
+    } else if (selection == cyl_row) {
         snprintf(input, 5, "%d", cylinders);
         if (gui_input(" Enter Cylinder Count ", input, input, 4, 0) > 0) {
           value = atoi(input);
@@ -1536,7 +1557,7 @@ void gui_hard_menu(void)
             }
           }
         }
-    } else if (selection == nslots + 5) {
+    } else if (selection == head_row) {
         snprintf(input, 2, "%d", heads);
         if (gui_input(" Enter Head Count ", input, input, 1, 0) > 0) {
           value = atoi(input);
@@ -1547,7 +1568,7 @@ void gui_hard_menu(void)
               gui_message("ERROR", "Head Count must be between 0 and 8");
           }
         }
-    } else if (selection == nslots + 6) {
+    } else if (selection == sec_row) {
         snprintf(input, 4, "%d", sectors);
         if (gui_input(" Enter Sector Count ", input, input, 3, 0) > 0) {
           value = atoi(input);
@@ -1558,9 +1579,9 @@ void gui_hard_menu(void)
               gui_message("ERROR", "Sector Count must be between 4 and 256");
           }
         }
-    } else if (selection == nslots + 7) {
+    } else if (selection == insert_row) {
         drive = gui_popup("Drive", targets, nslots + 1, drive);
-    } else if (selection == nslots + 8) {
+    } else if (selection == create_row) {
         filename[0] = 0;
         if (gui_input(" Enter Filename for Hard Disk Image ",
             trs_hard_dir, filename, FILENAME_MAX, 1) > 0) {
@@ -1569,9 +1590,8 @@ void gui_hard_menu(void)
             if (trs_create_blank_hard(filename, cylinders, heads, sectors) != 0)
               gui_error(filename);
             else if (drive)
-              /* drive-1 selects a slot; attach to its controller/unit */
-              hdctl_attach(slot[drive - 1].type,
-                           hard_unit_index(menu, drive - 1), filename);
+              /* drive-1 is the slot; attach to the active controller. */
+              hdctl_attach(active, drive - 1, filename);
             return;
           }
         }
