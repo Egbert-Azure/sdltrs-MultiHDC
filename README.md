@@ -79,6 +79,13 @@ Longer references and the investigation history are in [`docs/`](docs):
 
 See [`changelog.md`](changelog.md) for the dated development history.
 
+## Related repositories
+
+The disk images, boot EPROMs, and reverse-engineering notes this emulator is used with live in two companion archive repositories:
+
+- **[TCS-Trommeschlaeger-Genie-IIIs](https://github.com/Egbert-Azure/TCS-Trommeschlaeger-Genie-IIIs)** — the general Genie IIIs archive: CP/M and Holte material, disks, EPROMs, source, utilities, and how-to articles.
+- **[TCS-Trommeschlaeger-Genie-IIIs-GDos-2.4](https://github.com/Egbert-Azure/TCS-Trommeschlaeger-Genie-IIIs-GDos-2.4)** — the GDOS 2.4 archive: system disks, the Sopp hard-disk boot ROM, and the disassembly/investigation notes behind the drives-5/6 work.
+
 ## License
 
 [BSD 2-Clause](LICENSE), inherited from the upstream SDL2TRS / xtrs projects. See [xtrs.LICENSE](xtrs.LICENSE) for the xtrs-derived portions.
