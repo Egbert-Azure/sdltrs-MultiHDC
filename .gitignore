@@ -7,3 +7,4 @@ sdl2trs-omti.command
 push.command
 boot_gdos24_xebec.command
 boot_gdos24_xebec_debug.command
+run-multihdc.t8c
