@@ -307,12 +307,10 @@ void z80_out(int port, int value)
             if (hdctl_get_active() == HARD_DRIVE)
               trs_hard_out(port + 0x78, value); /* 0xC8 - 0xCF */
             break;
-          case 0x40: /* TRS_OMTI_PORT   / TRS_XEBEC_PORT */
-          case 0x41: /* TRS_OMTI_STATUS / TRS_XEBEC_STATUS */
-          case 0x42: /* TRS_OMTI_SELECT / TRS_XEBEC_SELECT */
-            if (hdctl_get_active() == XEBEC_DRIVE)
-              trs_xebec_out(port, value);
-            else if (hdctl_get_active() == OMTI_DRIVE)
+          case 0x40: /* TRS_OMTI_PORT   -- OMTI only (Xebec lives at 0x00-0x02) */
+          case 0x41: /* TRS_OMTI_STATUS */
+          case 0x42: /* TRS_OMTI_SELECT */
+            if (hdctl_get_active() == OMTI_DRIVE)
               trs_omti_out(port, value);
             break;
           case 0x00: /* TRS_XEBEC_TCS_DATA: TCS onboard SASI adapter, */
@@ -828,11 +826,10 @@ int z80_in(int port)
             if (hdctl_get_active() == HARD_DRIVE)
               value = trs_hard_in(port + 0x78); /* 0xC8 - 0xCF */
             break;
-          case 0x40: /* TRS_OMTI_PORT   / TRS_XEBEC_PORT */
-          case 0x41: /* TRS_OMTI_STATUS / TRS_XEBEC_STATUS */
-            if (hdctl_get_active() == XEBEC_DRIVE)
-              value = trs_xebec_in(port);
-            else if (hdctl_get_active() == OMTI_DRIVE)
+          case 0x40: /* TRS_OMTI_PORT   -- OMTI only (Xebec lives at 0x00-0x02) */
+          case 0x41: /* TRS_OMTI_STATUS */
+          case 0x42: /* TRS_OMTI_SELECT */
+            if (hdctl_get_active() == OMTI_DRIVE)
               value = trs_omti_in(port);
             break;
           case 0x00: /* TRS_XEBEC_TCS_DATA: TCS onboard SASI adapter, */
@@ -840,10 +837,6 @@ int z80_in(int port)
                         hard-disk driver uses (0x02/SEL is write-only) */
             if (hdctl_get_active() == XEBEC_DRIVE)
               value = trs_xebec_tcs_in(port);
-            break;
-          case 0x42: /* TRS_OMTI_SELECT -- no Xebec read equivalent (write only) */
-            if (hdctl_get_active() == OMTI_DRIVE)
-              value = trs_omti_in(port);
             break;
           case 0x43: /* TRS_OMTI_MASK -- no Xebec equivalent */
             if (hdctl_get_active() == OMTI_DRIVE)
