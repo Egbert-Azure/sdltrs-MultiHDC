@@ -1,65 +1,151 @@
 #!/bin/bash
-# Double-click this in Finder (or run from a terminal) to launch this repo's
-# own sdl2trs and boot GDOS 2.4 with the Xebec controller attached, for
-# testing drives 5/6 (the 0x00-0x02 SASI path). It builds first if needed.
+# ---------------------------------------------------------------------------
+# sdltrs-MultiHDC test launcher
 #
-# It uses its OWN config file (run-multihdc.t8c, regenerated each run) so
-# your global ~/.sdltrs.t8c is left completely alone -- no stale disk/ROM
-# paths leaking in. Every slot is also passed explicitly on the command line.
+# Boots this repo's own build/sdl2trs in one of the known-good Genie IIIs test
+# configurations. Boot EPROM, controller and .hdv are a matched set -- see
+# docs/boot-eprom-controller-pairing.md; if they disagree, the disk is simply
+# not found.
 #
-# Edit the three paths below if you want a different ROM / boot floppy /
-# hard-disk image.
+#   1  gdos    GDOS 2.4        standard EPROM  Xebec  g3s-gdos24-xebec-10mb.hdv
+#   2  holte   Holte CP/M 3.0  Sopp EPROM      OMTI   g3s-omti-WORKING.hdv
+#   3  kaempf  Kaempf CP/M 3.0 standard EPROM  Xebec  Kaempf CP-M-3-10mb.hdv
+#   4  z3plus  as 2, but on    g3s-omti-Z3Plus.hdv (same system, more tools)
+#
+# Usage:
+#   ./run-multihdc.command          # menu -- this is what a Finder double-click gets
+#   ./run-multihdc.command gdos     # or 1 / holte / 2 / kaempf / 3 / z3plus / 4
+#
+# Each scenario writes its own run-<name>.t8c and passes every disk/hard/omti/
+# xebec slot explicitly, so ~/.sdltrs.t8c is never read and nothing stale from
+# a previous session leaks in. It builds first if the binary is missing.
+# ---------------------------------------------------------------------------
 
 set -e
 cd "$(dirname "$0")"
 REPO="$(pwd)"
 BIN="$REPO/build/sdl2trs"
 
-# --- edit these if needed ---------------------------------------------------
-ROM="$REPO/ROM/g3s_8501004_bootrom_2732.bin"      # standard Genie IIIs boot ROM
-FLOPPY="$REPO/dmk-working/G3S-GDOS24.DMK"          # GDOS 2.4 bootable system floppy
-XEBEC_HDV="$REPO/HDV/g3s-gdos24-omti-10mb.hdv"     # hard-disk image on the Xebec
-# ---------------------------------------------------------------------------
+ROM_STD="$REPO/ROM/g3s_8501004_bootrom_2732.bin"   # standard Genie IIIs boot ROM (2732, 4 KB)
+ROM_OMTI="$REPO/ROM/g3s_hd-omti_bootrom_2764.bin"  # Arnulf Sopp's HD-boot ROM (2764, 8 KB)
 
-# Build if the binary is missing.
+die() {
+  echo
+  echo "$1"
+  [ -t 0 ] && read -n 1 -s -r -p "Press any key to close..."
+  exit 1
+}
+
+# --- pick the scenario -----------------------------------------------------
+choice="$1"
+if [ -z "$choice" ]; then
+  echo "sdltrs-MultiHDC -- which test?"
+  echo
+  echo "  1  GDOS 2.4         standard EPROM   Xebec   drives 5/6"
+  echo "  2  Holte CP/M 3.0   Sopp EPROM       OMTI    boots from HD, C: and D:"
+  echo "  3  Kaempf CP/M 3.0  standard EPROM   Xebec   boots from floppy"
+  echo "  4  Holte CP/M 3.0   Sopp EPROM       OMTI    Z3Plus image (more tools)"
+  echo
+  read -r -p "Choice [1]: " choice
+  choice="${choice:-1}"
+fi
+
+case "$(echo "$choice" | tr '[:upper:]' '[:lower:]')" in
+  1|gdos|gdos24)
+    NAME="gdos24-xebec"
+    LABEL="GDOS 2.4 -- standard EPROM, Xebec controller"
+    ROM="$ROM_STD"
+    CTL="xebec"
+    FLOPPY="$REPO/dmk-working/G3S-GDOS24.DMK"
+    HDV="$REPO/HDV/g3s-gdos24-xebec-10mb.hdv"
+    HINT="Boots from floppy; GDOS's resident driver then probes the HD at ports
+0x00-0x02 and offers it as drives 5 and 6.
+Try:  PD 5      (also GENDIR 5 / DIR 5; HDFORMAT, confirm with JA, to reformat)"
+    ;;
+  2|holte|omti)
+    NAME="holte-omti"
+    LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller"
+    ROM="$ROM_OMTI"
+    CTL="omti"
+    FLOPPY=""
+    HDV="$REPO/HDV/g3s-omti-WORKING.hdv"
+    HINT="Boots straight off the hard disk, no floppy: GENIE IIIs banner, CP/M V3.0
+loader, RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3, 60K TPA, then C>.
+C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
+    ;;
+  3|kaempf|kämpf|cpm3)
+    NAME="kaempf-xebec"
+    LABEL="Kaempf CP/M 3.0 -- standard EPROM, Xebec controller"
+    ROM="$ROM_STD"
+    CTL="xebec"
+    FLOPPY="$REPO/dmk-working/Kaempf-CP-M-3.dmk"
+    HDV="$REPO/HDV/Kaempf CP-M-3-10mb.hdv"
+    HINT="Boots CP/M 3.0 from the floppy, then reaches the HD through its own driver.
+Same physical 10 MB drive as test 1, but CP/M-formatted instead of GDOS."
+    ;;
+  4|z3plus|z3)
+    NAME="holte-omti-z3plus"
+    LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller (Z3Plus image)"
+    ROM="$ROM_OMTI"
+    CTL="omti"
+    FLOPPY=""
+    HDV="$REPO/HDV/g3s-omti-Z3Plus.hdv"
+    HINT="Same as test 2, on the Z3Plus image -- same system, more tools installed."
+    ;;
+  *)
+    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 3/kaempf, 4/z3plus)."
+    ;;
+esac
+
+# --- build if needed -------------------------------------------------------
 if [ ! -x "$BIN" ]; then
   echo "sdl2trs not built yet -- building ..."
   cmake -S "$REPO" -B "$REPO/build" && cmake --build "$REPO/build"
   echo
 fi
 
-# Sanity-check the assets so a typo gives a clear message, not a silent boot.
-for f in "$ROM" "$FLOPPY" "$XEBEC_HDV"; do
-  if [ ! -f "$f" ]; then
-    echo "Missing file: $f"
-    echo "Edit the path near the top of this script."
-    read -n 1 -s -r -p "Press any key to close..."
-    exit 1
-  fi
+# --- sanity-check the assets so a typo gives a message, not a silent boot ---
+CHECK=("$ROM" "$HDV")
+[ -n "$FLOPPY" ] && CHECK+=("$FLOPPY")
+for f in "${CHECK[@]}"; do
+  [ -f "$f" ] || die "Missing file: $f"
 done
 
-# Fresh isolated config -- passing a .t8c on the command line makes sdl2trs
-# use THIS file instead of ~/.sdltrs.t8c.
-CFG="$REPO/run-multihdc.t8c"
+# --- isolated config; passing a .t8c makes sdl2trs ignore ~/.sdltrs.t8c ----
+CFG="$REPO/run-$NAME.t8c"
 cat > "$CFG" <<EOF
 model=1
 romfile1=$ROM
-hardcontroller=xebec
+hardcontroller=$CTL
 EOF
 
-echo "Booting GDOS 2.4 (Xebec) ..."
-echo "  ROM:    $ROM"
-echo "  floppy: $FLOPPY"
-echo "  xebec0: $XEBEC_HDV"
+echo "== $LABEL =="
+echo "  ROM:        $ROM"
+echo "  controller: $CTL"
+echo "  floppy0:    ${FLOPPY:-(none -- booting from hard disk)}"
+echo "  hard disk:  $HDV"
 echo
+echo "$HINT"
+echo
+echo "Alt-D / Alt-F: floppy management   Alt-H: hard-disk management"
+echo
+
+# Only the active controller's slot gets the image; every other slot is
+# cleared explicitly.
+if [ "$CTL" = "xebec" ]; then
+  CTL_ARGS=(-xebec0 "$HDV" -xebec1 "" -omti0 "" -omti1 "")
+else
+  CTL_ARGS=(-omti0 "$HDV" -omti1 "" -xebec0 "" -xebec1 "")
+fi
 
 "$BIN" "$CFG" \
   -disk0 "$FLOPPY" -disk1 "" -disk2 "" -disk3 "" \
   -disk4 "" -disk5 "" -disk6 "" -disk7 "" \
-  -xebec0 "$XEBEC_HDV" -xebec1 "" \
-  -omti0 "" -omti1 "" \
+  "${CTL_ARGS[@]}" \
   -hard0 "" -hard1 "" -hard2 "" -hard3 "" \
   -nofullscreen
 
 echo
-echo "Emulator closed."
+echo "sdl2trs exited."
+[ -t 0 ] && read -n 1 -s -r -p "Press any key to close..."
+exit 0
