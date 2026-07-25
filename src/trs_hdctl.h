@@ -21,13 +21,18 @@
 extern int  hdctl_is_hard_type(int type);
 
 /*
- * Which single controller the machine is fitted with.  Only meaningful on
- * the Genie IIIs (GENIE3S), where WD1000, OMTI and Xebec are mutually
- * exclusive alternatives on the same machine; other TRS-80 models only
- * ever have WD1000.  hdctl_set_active() pins an explicit choice (GUI /
- * CLI / config); hdctl_get_active() returns that choice, or — if none was
- * pinned — auto-resolves from which backend has an image attached (Xebec,
- * then OMTI, else WD1000), so existing image-only setups keep working.
+ * Which controller new images and GUI actions default to (the
+ * `hardcontroller=` setting).  hdctl_set_active() pins an explicit choice
+ * (GUI / CLI / config); hdctl_get_active() returns that choice, or — if
+ * none was pinned — auto-resolves from which backend has an image attached
+ * (Xebec, then OMTI, else WD1000).
+ *
+ * This is a user-interface preference only.  It does NOT gate I/O: the
+ * three controllers sit at fixed, disjoint port ranges (WD1000 0x50-0x57,
+ * OMTI 0x40-0x43, Xebec 0x00-0x02 on the TCS onboard SASI adapter) and are
+ * wired in independently of one another and of the boot EPROM, so each one
+ * answers on its own ports whenever it has an image attached, whatever is
+ * "active" here.
  */
 extern void hdctl_set_active(int type);
 extern int  hdctl_get_active(void);

@@ -108,6 +108,12 @@ typedef struct {
   Uint8 final_status;   /* next-to-last status byte */
   int status_index;     /* 0 = next-to-last byte pending, 1 = last (zero) byte pending */
 
+  /* Latched for the next REQUEST SENSE (cleared at the start of every
+   * other command, as a real controller does). */
+  Uint8 sense_code;     /* TRS_XEBEC_ERR_* of the last completed command */
+  int sense_valid;      /* sense_lba meaningful (address-valid bit) */
+  long sense_lba;       /* block in error, or one past the last block formatted */
+
   HardImage d[TRS_XEBEC_MAXDRIVES];
 } State;
 
@@ -115,8 +121,11 @@ static State state;
 
 static int  xebec_open(int drive);
 static int  xebec_seek(int lun, long lba);
+static long xebec_capacity(int lun);
+static int  xebec_format(int lun, long lba, int to_end_of_drive);
 static void xebec_command(void);
 static void xebec_finish(int ok);
+static void xebec_fail(int code, int addr_valid, long lba);
 static int  xebec_data_in(void);
 static void xebec_data_out(int value);
 
@@ -166,7 +175,7 @@ void trs_xebec_init(int poweron)
 
     state.present = 0;
     state.secsize = XEBEC_DEFAULT_SECSIZE;
-    memset(state.fillbuf, 0xe5, sizeof(state.fillbuf));
+    memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
       state.d[i].writeprot = 0;
@@ -255,6 +264,11 @@ void trs_xebec_tcs_out(int port, int value)
   if (trs_io_debug_flags & XEBECDEBUG1)
     debug("[PC=%04X] trs_xebec_tcs_out(%02X), %02X\n", Z80_PC, port, value);
 #endif
+  /* No image attached: no card in the machine, so ignore writes -- the
+   * matching reads in trs_xebec_tcs_in() already float high. */
+  if (state.present == 0)
+    return;
+
   switch (port) {
   case TRS_XEBEC_TCS_DATA:
     if (state.phase == XEBEC_PH_IDLE)
@@ -287,6 +301,107 @@ static void xebec_finish(int ok)
   state.status_index = 0;
 }
 
+/* Fail the current command and latch why, for the REQUEST SENSE that a
+ * driver is expected to issue immediately afterwards. */
+static void xebec_fail(int code, int addr_valid, long lba)
+{
+  state.sense_code = (Uint8)code;
+  state.sense_valid = addr_valid;
+  state.sense_lba = lba;
+#if ZBX
+  if (trs_io_debug_flags & XEBECDEBUG2)
+    debug("trs_xebec: command 0x%02X FAILED, sense 0x%02X at lba %ld\n",
+        state.command, state.sense_code, addr_valid ? lba : -1L);
+#endif
+  xebec_finish(-1);
+}
+
+/*
+ * Total addressable blocks on a unit, from its Reed-header geometry.
+ *
+ * Only the format and check-track commands bound themselves by this.
+ * READ/WRITE deliberately do not: they never have, and the verified
+ * GDOS 2.4 path must not start seeing address errors it never saw.
+ * The format commands do need the bound -- without it a guest whose
+ * configured drive type is larger than the image just walks off the end,
+ * and fseek+fwrite silently grow the .hdv (this is what inflated
+ * "Kaempf CP-M-3-10mb.hdv" from 10 MB to 100 MB).
+ */
+static long xebec_capacity(int lun)
+{
+  const HardImage *d = &state.d[lun];
+
+  return (long)d->cyls * d->heads * d->secs;
+}
+
+/*
+ * Write the format data pattern over whole tracks.
+ *
+ * FORMAT TRACK / FORMAT BAD TRACK do a single track; FORMAT DRIVE runs
+ * from the given block through to the end of the drive. Sector data is
+ * all this emulator has -- there are no ID fields or ECC in a flat .hdv
+ * -- so formatting is exactly this fill.
+ *
+ * The manual has a real controller round the start down to a track
+ * boundary (4.5.3.5), using the geometry the host gave it in INITIALIZE
+ * DRIVE CHARACTERISTICS. This emulator keys geometry to the image's Reed
+ * header instead, so the guest's idea of a track and ours can differ --
+ * Klaus Kaempf's CP/M formatter steps 16 sectors per track through an
+ * image whose header declares 17. Rounding to *our* boundary would then
+ * re-format block 0 forever instead of advancing. So we format
+ * d->secs blocks from exactly where the guest asked: any mismatch
+ * over-covers into the next track with the identical fill byte, which is
+ * harmless and idempotent, where rounding could leave sectors untouched.
+ *
+ * On success state.sense_lba is left one block past the last block
+ * written, which is what a driver walking the disk track by track reads
+ * back with REQUEST SENSE (manual 4.5.3.4).
+ *
+ * Returns 0 on success, or a TRS_XEBEC_ERR_* code on failure.
+ */
+static int xebec_format(int lun, long lba, int to_end_of_drive)
+{
+  HardImage *d = &state.d[lun];
+  const Uint8 *pattern;
+  long first, last, blk;
+
+  if (d->file == NULL && xebec_open(lun) != 0)
+    return TRS_XEBEC_ERR_NOT_READY;
+  if (d->secs <= 0 || xebec_capacity(lun) <= 0)
+    return TRS_XEBEC_ERR_NOT_READY;
+  if (d->writeprot)
+    return TRS_XEBEC_ERR_WRITE_FAULT;
+
+  first = lba;
+  if (first >= xebec_capacity(lun))
+    return TRS_XEBEC_ERR_BAD_ADDR;
+
+  last = to_end_of_drive ? xebec_capacity(lun) : first + d->secs;
+  if (last > xebec_capacity(lun))
+    last = xebec_capacity(lun);
+
+  /* Control byte bit 5: format with the buffer the host loaded via
+   * WRITE SECTOR BUFFER rather than the controller's own fill byte. */
+  pattern = (state.dcb[TRS_XEBEC_DCB_CONTROL] & TRS_XEBEC_CTRL_KEEPBUF)
+          ? state.buf : state.fillbuf;
+
+  /* Blocks are contiguous in the image, so one seek covers the range. */
+  if (xebec_seek(lun, first) != 0)
+    return TRS_XEBEC_ERR_NOT_READY;
+
+  for (blk = first; blk < last; blk++) {
+    if (fwrite(pattern, 1, state.secsize, d->file) != (size_t)state.secsize) {
+      file_error("formatting xebec%d", lun);
+      state.sense_lba = blk;
+      return TRS_XEBEC_ERR_WRITE_FAULT;
+    }
+  }
+
+  fflush(d->file);
+  state.sense_lba = last;
+  return TRS_XEBEC_ERR_NONE;
+}
+
 static void xebec_command(void)
 {
   long lba;
@@ -301,15 +416,30 @@ static void xebec_command(void)
 
 #if ZBX
   if (trs_io_debug_flags & XEBECDEBUG2)
-    debug("trs_xebec: command 0x%02X lun:%d lba:%ld\n",
-        state.command, state.lun, lba);
+    /* Whole DCB, not just the decoded fields: byte 4 is the block count
+     * for READ/WRITE but the interleave for the format commands, and
+     * byte 5 is the control byte -- both are needed to tell what a guest
+     * formatter is actually asking for. */
+    debug("trs_xebec: command 0x%02X lun:%d lba:%ld"
+          " dcb:%02X %02X %02X %02X %02X %02X secsize:%d\n",
+        state.command, state.lun, lba,
+        state.dcb[0], state.dcb[1], state.dcb[2],
+        state.dcb[3], state.dcb[4], state.dcb[5], state.secsize);
 #endif
+
+  /* Sense describes the command just completed, so every command but
+   * REQUEST SENSE itself starts by clearing it. */
+  if (state.command != TRS_XEBEC_REQUEST_SENSE) {
+    state.sense_code = TRS_XEBEC_ERR_NONE;
+    state.sense_valid = 0;
+    state.sense_lba = 0;
+  }
 
   /* LUN is a 1-bit field in the DCB, so guest software can address a
    * second unit even though only TRS_XEBEC_MAXDRIVES is emulated: treat
    * it as not-present rather than indexing state.d[] out of bounds. */
   if (state.lun >= TRS_XEBEC_MAXDRIVES) {
-    xebec_finish(-1);
+    xebec_fail(TRS_XEBEC_ERR_NOT_READY, 0, 0);
     return;
   }
 
@@ -346,22 +476,56 @@ static void xebec_command(void)
     }
     break;
 
-  case TRS_XEBEC_FORMAT_TRACK:
   case TRS_XEBEC_FORMAT_DRIVE:
-    if (xebec_seek(state.lun, lba) == 0) {
-      FILE *f = state.d[state.lun].file;
+  case TRS_XEBEC_FORMAT_TRACK:
+  case TRS_XEBEC_FORMAT_BAD_TRACK: {
+    /* FORMAT DRIVE formats from the starting track to the end of the
+     * disk; the two track commands do one track. FORMAT BAD TRACK only
+     * differs on real media by setting the bad-track flag in the ID
+     * field, which a flat .hdv has no room for. */
+    int err = xebec_format(state.lun, lba,
+                           state.command == TRS_XEBEC_FORMAT_DRIVE);
 
-      if (f && fwrite(state.fillbuf, 1, state.secsize, f) != (size_t)state.secsize) {
-        if (errno) {
-          file_error("formatting xebec%d", state.lun);
-          xebec_finish(-1);
-          break;
-        }
-      }
+    if (err == TRS_XEBEC_ERR_NONE) {
+      state.sense_valid = 1;   /* address = one past the last block done */
       xebec_finish(0);
     } else {
-      xebec_finish(-1);
+      xebec_fail(err, 1, state.sense_lba);
     }
+    break;
+  }
+
+  case TRS_XEBEC_CHECK_TRACK:
+    /* Verify a track's ID fields against the interleave table. A flat
+     * image has no ID fields and cannot be unformatted, so any track
+     * inside the drive's geometry checks out. Sense reports one block
+     * past the checked track, as after a format. */
+    if (state.d[state.lun].file == NULL && xebec_open(state.lun) != 0) {
+      xebec_fail(TRS_XEBEC_ERR_NOT_READY, 0, 0);
+    } else if (lba >= xebec_capacity(state.lun)) {
+      xebec_fail(TRS_XEBEC_ERR_BAD_ADDR, 1, lba);
+    } else {
+      state.sense_lba = lba + state.d[state.lun].secs;
+      state.sense_valid = 1;
+      xebec_finish(0);
+    }
+    break;
+
+  case TRS_XEBEC_READ_VERIFY:
+    /* READ with no data passed to the host. Deliberately no range check:
+     * READ and WRITE do not range-check either, and this must not be the
+     * one command that starts rejecting addresses the working GDOS 2.4
+     * path may rely on. */
+    xebec_finish(xebec_seek(state.lun, lba) == 0 ? 0 : -1);
+    break;
+
+  case TRS_XEBEC_READ_ECC_LEN:
+    /* Nothing is ever corrected by ECC here, so the burst length is
+     * always zero. */
+    state.buf[0] = 0;
+    state.datalen = 1;
+    state.phase = XEBEC_PH_DATA_IN;
+    state.status = XEBEC_STATUS_DATA_IN;
     break;
 
   case TRS_XEBEC_INIT_DRIVE_CHAR:
@@ -384,15 +548,22 @@ static void xebec_command(void)
     break;
 
   case TRS_XEBEC_REQUEST_SENSE:
-    /* No detailed error tracking is modeled: always report "no error",
-     * matching the all-zero encoding the manual defines for that case. */
-    memset(state.buf, 0, TRS_XEBEC_SENSELEN);
+    /* Report what the previous command latched. Byte 0 carries the error
+     * code plus the address-valid bit, bytes 1-3 the block address (with
+     * the LUN in bit 5 of byte 1). */
+    state.buf[0] = state.sense_code |
+        (state.sense_valid ? TRS_XEBEC_SENSE_ADDRVALID : 0);
+    state.buf[1] = (Uint8)(((state.sense_lba >> 16) & TRS_XEBEC_DCB1_ADDRMASK) |
+        (state.lun << TRS_XEBEC_DCB1_LUNSHIFT));
+    state.buf[2] = (Uint8)(state.sense_lba >> 8);
+    state.buf[3] = (Uint8)state.sense_lba;
     state.datalen = TRS_XEBEC_SENSELEN;
     state.phase = XEBEC_PH_DATA_IN;
     state.status = XEBEC_STATUS_DATA_IN;
     break;
 
   case TRS_XEBEC_READ_BUFFER:
+  case TRS_XEBEC_READ_BUFFER_S1410:
     /* Return the sector buffer as-is, no disk access */
     state.datalen = state.secsize;
     state.phase = XEBEC_PH_DATA_IN;
@@ -408,7 +579,7 @@ static void xebec_command(void)
 
   default:
     error("trs_xebec: unknown command 0x%02X", state.command);
-    xebec_finish(-1);
+    xebec_fail(TRS_XEBEC_ERR_BAD_CMD, 0, 0);
     break;
   }
 }
@@ -447,7 +618,20 @@ static void xebec_data_out(int value)
          * change addressing geometry: as with trs_omti.c's SET DRIVE
          * CHARACTERISTICS, real geometry stays keyed to the attached
          * image's own Reed header (the actual physical disk), not to
-         * whatever a boot ROM/driver declares here. */
+         * whatever a boot ROM/driver declares here. It is worth tracing
+         * though -- a guest declaring a bigger drive than the image is
+         * exactly what walks a formatter off the end of the .hdv. */
+#if ZBX
+        if (state.command == TRS_XEBEC_INIT_DRIVE_CHAR &&
+            (trs_io_debug_flags & XEBECDEBUG2))
+          debug("trs_xebec: drive characteristics: %d cyls, %d heads"
+                " (image says %d cyls, %d heads, %d sec/trk)\n",
+              (state.buf[TRS_XEBEC_CHAR_CYLHI] << 8) |
+                  state.buf[TRS_XEBEC_CHAR_CYLLO],
+              state.buf[TRS_XEBEC_CHAR_HEADS],
+              state.d[state.lun].cyls, state.d[state.lun].heads,
+              state.d[state.lun].secs);
+#endif
         xebec_finish(0);
       }
     }
