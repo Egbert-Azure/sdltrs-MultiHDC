@@ -2,6 +2,29 @@
 
 # Changelog
 
+## 2026-07-24
+## Port Mapping wrong #5
+The emulator was incorrectly letting the Xebec S1410 respond on ports 0x40–0x42 (a leftover hypothesis that Holte's CP/M driver drove the Xebec at OMTI's ports). On the real Genie IIIs, 0x40–0x43 is OMTI-only, and the Xebec is reached solely through the TCS onboard SASI adapter at 0x00–0x02 (the same interface GDOS 2.4 — and, it turns out, Holte's CP/M port with the original EPROM — actually use).
+
+ (src/trs_io.c):
+
+// BEFORE — Xebec wrongly answered at 0x40–0x42
+case 0x40: case 0x41: case 0x42:
+    if (hdctl_get_active() == XEBEC_DRIVE)
+        trs_xebec_out(port, value);
+    else if (hdctl_get_active() == OMTI_DRIVE)
+        trs_omti_out(port, value);
+    break;
+
+// AFTER — 0x40–0x43 is OMTI only; Xebec lives at 0x00–0x02
+case 0x40: case 0x41: case 0x42:
+    if (hdctl_get_active() == OMTI_DRIVE)
+        trs_omti_out(port, value);
+    break;
+
+The dead Xebec "Holte adapter" code (trs_xebec_in/trs_xebec_out and the 0x40-range port defines) was removed. Xebec's 0x00–0x02 path (GDOS 2.4 drives 5/6) is unchanged. 
+Net −101/+29 lines across trs_io.c, trs_xebec.c, trs_xebec.h;
+
 ## 2026-07-22 — Hard-disk backend unification & single active controller
 
 ### Added
