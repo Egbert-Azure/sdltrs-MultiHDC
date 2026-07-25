@@ -59,7 +59,7 @@ Two flag bytes (`5996h` and `440Ch`) had eaten a lot of my earlier time as suspe
 
 ## The fix
 
-`trs_xebec.c` now exposes a second interface, `trs_xebec_tcs_in` / `_out`, at ports `0x00`–`0x02`, sharing the same controller state machine as the Holte path. Commands that come in over the TCS adapter use 256-byte sectors; the Holte path stays at 512. I added CDB block-count support for multi-sector reads and writes, plus the `FORMAT TRACK` and read/write-sector-buffer opcodes G-DOS uses. Both interfaces are routed in the `GENIE3S` blocks of `trs_io.c`, gated on which controller is active, and the state-save version is bumped to 16.
+`trs_xebec.c` now exposes a second interface, `trs_xebec_tcs_in` / `_out`, at ports `0x00`–`0x02`, sharing the same controller state machine as the Holte path. Commands that come in over the TCS adapter use 256-byte sectors; the Holte path stays at 512. I added CDB block-count support for multi-sector reads and writes, plus the `FORMAT TRACK` and read/write-sector-buffer opcodes G-DOS uses. Both interfaces are routed in the `GENIE3S` blocks of `trs_io.c` — originally gated on which controller was "active", which turned out to be a bug in its own right (#6); the ports are fixed and disjoint, so each controller answers whenever it has an image attached — and the state-save version is bumped to 16.
 
 A successful selection now shows up in the log as the full handshake:
 
@@ -71,7 +71,9 @@ That last byte, `0x0B` = BUSY | REQ | C/D, is the controller answering.
 
 ## Verification under real G-DOS 2.4
 
-Tested interactively on `G3S-GDOS24.DMK` with `HDV/g3s-gdos24-omti-10mb.hdv`:
+Tested interactively on `G3S-GDOS24.DMK` with `HDV/g3s-gdos24-xebec-10mb.hdv`
+(the image was renamed since; G-DOS 2.4 has no OMTI support, the drive it
+finds here is the Xebec):
 
 - `PD 5` and `PD 6` return real drive data instead of "Bauteil nicht erreichbar".
 - `HDFORMAT` completes both passes ("Durchgang 1/2").

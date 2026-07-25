@@ -99,18 +99,40 @@ extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
 #define TRS_XEBEC_RECALIBRATE      0x01
 #define TRS_XEBEC_REQUEST_SENSE    0x03
 #define TRS_XEBEC_FORMAT_DRIVE     0x04
+#define TRS_XEBEC_CHECK_TRACK      0x05
 #define TRS_XEBEC_FORMAT_TRACK     0x06
+#define TRS_XEBEC_FORMAT_BAD_TRACK 0x07
 #define TRS_XEBEC_READ             0x08
+#define TRS_XEBEC_READ_VERIFY      0x09
 #define TRS_XEBEC_WRITE            0x0a
 #define TRS_XEBEC_SEEK             0x0b
 #define TRS_XEBEC_INIT_DRIVE_CHAR  0x0c
+#define TRS_XEBEC_READ_ECC_LEN     0x0d
 #define TRS_XEBEC_READ_BUFFER      0x0e
 #define TRS_XEBEC_WRITE_BUFFER     0x0f
+/*
+ * The S1410A manual numbers the sector-buffer pair 0x0F WRITE SECTOR
+ * BUFFER / 0x10 READ SECTOR BUFFER, and gives 0x0E to FORMAT ALTERNATE
+ * TRACK. TRS_XEBEC_READ_BUFFER above stays at 0x0E because that is what
+ * GDOS 2.4's resident driver was observed to issue and what the verified
+ * working GDOS path uses; 0x10 is accepted as the manual-correct synonym
+ * so drivers written to the book also work. Resolve the discrepancy with
+ * an XEBECDEBUG2 trace of a real GDOS session before changing 0x0E.
+ */
+#define TRS_XEBEC_READ_BUFFER_S1410 0x10
 
 /* DCB byte 1: LUN bit and high 5 bits of the 21-bit logical block address */
 #define TRS_XEBEC_DCB1_ADDRMASK 0x1f
 #define TRS_XEBEC_DCB1_LUNMASK  0x20
 #define TRS_XEBEC_DCB1_LUNSHIFT 5
+
+/*
+ * DCB byte 5 is the control byte. Bit 5 tells the controller to use the
+ * host-supplied sector buffer (loaded with WRITE SECTOR BUFFER) as the
+ * data pattern for the format commands instead of its own fill byte.
+ */
+#define TRS_XEBEC_DCB_CONTROL   5
+#define TRS_XEBEC_CTRL_KEEPBUF  0x20
 
 /*
  * Next-to-last completion status byte (first of the two bytes read back
@@ -124,8 +146,31 @@ extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
  * Request Sense Status (opcode 0x03) reply: 4 bytes.
  * Byte 0: bits 0-3 error code, bits 4-5 error type, bit 7 address valid.
  * Bytes 1-3: logical block address (MSB first) associated with the error.
+ *
+ * Error codes below are the subset this emulator can actually produce;
+ * the full table is in the manual, section 4.7.
  */
 #define TRS_XEBEC_SENSELEN 4
+
+#define TRS_XEBEC_SENSE_ADDRVALID 0x80
+
+#define TRS_XEBEC_ERR_NONE        0x00 /* command completed OK              */
+#define TRS_XEBEC_ERR_NOT_READY   0x04 /* drive not ready after selection   */
+#define TRS_XEBEC_ERR_WRITE_FAULT 0x03 /* write fault (write-protected here)*/
+#define TRS_XEBEC_ERR_FORMAT      0x1a /* format error (check track format) */
+#define TRS_XEBEC_ERR_BAD_CMD     0x20 /* invalid command                   */
+#define TRS_XEBEC_ERR_BAD_ADDR    0x21 /* illegal disk address              */
+
+/*
+ * Data pattern written into the DATA fields by the format commands when
+ * the host does not supply its own (control-byte bit 5, above).
+ *
+ * The manual's default is 0x6C. This emulator writes 0xE5 instead: it is
+ * what the verified-working GDOS 2.4 HDFORMAT path has always seen here,
+ * and 0xE5 is also what CP/M expects to find in an erased directory. Try
+ * 0x6C if a guest formatter turns out to depend on the documented value.
+ */
+#define TRS_XEBEC_FORMAT_FILL 0xe5
 
 /*
  * Initialize Drive Characteristics (opcode 0x0C) parameter block: 8

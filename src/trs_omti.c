@@ -246,6 +246,11 @@ void trs_omti_out(int port, int value)
   if (trs_io_debug_flags & OMTIDEBUG1)
     debug("[PC=%04X] trs_omti_out(%02X), %02X\n", Z80_PC, port, value);
 #endif
+  /* No image attached: no card in the machine, so ignore writes -- the
+   * matching reads in trs_omti_in() already float high. */
+  if (state.present == 0)
+    return;
+
   switch (port) {
   case TRS_OMTI_PORT:
     omti_data_out(value);

@@ -9,12 +9,14 @@
 #
 #   1  gdos    GDOS 2.4        standard EPROM  Xebec  g3s-gdos24-xebec-10mb.hdv
 #   2  holte   Holte CP/M 3.0  Sopp EPROM      OMTI   g3s-omti-WORKING.hdv
-#   3  kaempf  Kaempf CP/M 3.0 standard EPROM  Xebec  Kaempf CP-M-3-10mb.hdv
 #   4  z3plus  as 2, but on    g3s-omti-Z3Plus.hdv (same system, more tools)
+#
+# (3 was Kaempf's CP/M; retired -- his CP/M 3.0 disk has no Winchester init
+# utility, and the 2.2X "cpm22x" disks are Genie III, a different machine.)
 #
 # Usage:
 #   ./run-multihdc.command          # menu -- this is what a Finder double-click gets
-#   ./run-multihdc.command gdos     # or 1 / holte / 2 / kaempf / 3 / z3plus / 4
+#   ./run-multihdc.command gdos     # or 1 / holte / 2 / z3plus / 4
 #
 # Each scenario writes its own run-<name>.t8c and passes every disk/hard/omti/
 # xebec slot explicitly, so ~/.sdltrs.t8c is never read and nothing stale from
@@ -43,7 +45,6 @@ if [ -z "$choice" ]; then
   echo
   echo "  1  GDOS 2.4         standard EPROM   Xebec   drives 5/6"
   echo "  2  Holte CP/M 3.0   Sopp EPROM       OMTI    boots from HD, C: and D:"
-  echo "  3  Kaempf CP/M 3.0  standard EPROM   Xebec   boots from floppy"
   echo "  4  Holte CP/M 3.0   Sopp EPROM       OMTI    Z3Plus image (more tools)"
   echo
   read -r -p "Choice [1]: " choice
@@ -73,16 +74,6 @@ Try:  PD 5      (also GENDIR 5 / DIR 5; HDFORMAT, confirm with JA, to reformat)"
 loader, RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3, 60K TPA, then C>.
 C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
     ;;
-  3|kaempf|kämpf|cpm3)
-    NAME="kaempf-xebec"
-    LABEL="Kaempf CP/M 3.0 -- standard EPROM, Xebec controller"
-    ROM="$ROM_STD"
-    CTL="xebec"
-    FLOPPY="$REPO/dmk-working/Kaempf-CP-M-3.dmk"
-    HDV="$REPO/HDV/Kaempf CP-M-3-10mb.hdv"
-    HINT="Boots CP/M 3.0 from the floppy, then reaches the HD through its own driver.
-Same physical 10 MB drive as test 1, but CP/M-formatted instead of GDOS."
-    ;;
   4|z3plus|z3)
     NAME="holte-omti-z3plus"
     LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller (Z3Plus image)"
@@ -93,7 +84,7 @@ Same physical 10 MB drive as test 1, but CP/M-formatted instead of GDOS."
     HINT="Same as test 2, on the Z3Plus image -- same system, more tools installed."
     ;;
   *)
-    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 3/kaempf, 4/z3plus)."
+    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 4/z3plus)."
     ;;
 esac
 

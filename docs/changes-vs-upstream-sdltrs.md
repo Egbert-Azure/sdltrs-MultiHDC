@@ -7,7 +7,7 @@ How `sdltrsXebec` diverges from stock SDL2TRS ([`gitlab.com/jengun/sdltrs`](http
 The baseline for comparison is the upstream commit immediately before any hard-disk-controller work (`17f2f19d`, "Refactor check of changed bits"). Two layers sit on top of it:
 
 1. **OMTI layer**, inherited from [`sdltrsOMTI`](https://github.com/Egbert-Azure/sdltrsOMTI): OMTI 5527 SASI controller emulation and its wiring.
-2. **Xebec layer**, this fork: the Xebec S1410 controller, the shared image/dispatch refactor, and the single-active-controller model.
+2. **Xebec layer**, this fork: the Xebec S1410 controller and the shared image/dispatch refactor.
 
 Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none removed. Of the 15, 13 appear in the Source table below; the other two are `src/Makefile` and `src/BSDmakefile`. This fork adds 8 further files to `src/`, bringing it to 55. The two remaining modified build files, `CMakeLists.txt` and `Makefile.am`, sit at the repo root and so fall outside the 47. `configure.ac`, also root-level, is unchanged.
 
@@ -18,7 +18,7 @@ Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none 
 | `src/trs_omti.c` / `.h` | OMTI | OMTI 5527 SASI/MFM controller: phase state machine (idle → CDB → data → status), 6-byte CDBs, ports `0x40`–`0x43`. |
 | `src/trs_xebec.c` / `.h` | Xebec | Xebec S1410 SASI controller with two host-adapter interfaces onto one core: Holte's CP/M adapter at `0x40`–`0x42`, and the TCS onboard adapter at `0x00`–`0x02` (256-byte sectors) that GDOS 2.4 uses. |
 | `src/trs_hard_image.c` / `.h` | Xebec | Shared Reed-header `.hdv` open, geometry decode and sector-offset math (`hard_image_open` / `hard_image_offset`). Replaces three near-identical copies that had lived in the WD1000, OMTI and Xebec backends. |
-| `src/trs_hdctl.c` / `.h` | Xebec | `(controller-type, unit)` dispatch over the three backends, plus the single active-controller setting (`hdctl_get_active` / `_set_active`). A real Genie IIIs is fitted with exactly one hard-disk controller. |
+| `src/trs_hdctl.c` / `.h` | Xebec | `(controller-type, unit)` dispatch over the three backends, plus the default-controller setting (`hdctl_get_active` / `_set_active`) that decides where the GUI and CLI attach images. It does not gate I/O — see #6. |
 
 ## Files modified (from upstream)
 
@@ -36,7 +36,7 @@ Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none 
 
 | File | +/− vs upstream | Why |
 |------|-----------------|-----|
-| `src/trs_io.c` | +47 / −2 | GENIE3S port dispatch for the SASI controllers (`0x40`–`0x43`, `0x00`–`0x02`) and the WD1000 remap, gated so only the active controller answers the bus (`hdctl_get_active()`). Replaces the earlier image-presence heuristic. |
+| `src/trs_io.c` | +45 / −2 | GENIE3S port dispatch for the SASI controllers (`0x40`–`0x43`, `0x00`–`0x02`) and the WD1000 remap. The port ranges are fixed and disjoint, so each controller answers on its own whenever it has an image attached; nothing arbitrates. |
 | `src/trs_sdl_gui.c` | +125 / −51 | Hard Disk Management menu: controller selector, generic per-controller drive slots, create-disk routing to any controller, write-protect on all three controllers. `MENU.type` de-`const`ed so the menu can be built at runtime. |
 | `src/trs_options.c` | +59 / −2 | CLI flags (`-omti0/1`, `-x0/1`, `-hard2/3`) and config keys (`omti%d`, `xebec%d`, `hardcontroller`), parsing and config-file writing. |
 | `src/trs_hard.c` | +25 / −96 | WD1000/1010 backend refactored onto the shared `trs_hard_image` helpers (net shrink), plus a LUN/drive bounds guard. |

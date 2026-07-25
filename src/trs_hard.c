@@ -311,6 +311,11 @@ void trs_hard_out(int port, int value)
   if (trs_io_debug_flags & HARDDEBUG1)
     debug("[PC=%04X] trs_hard_out(%s), %02X\n", Z80_PC, hard_cmd(port), value);
 #endif
+  /* No image attached: no card in the machine, so ignore writes -- the
+   * matching reads in trs_hard_in() already float high. */
+  if (state.present == 0)
+    return;
+
   switch (port) {
   case TRS_HARD_WP:
     break;
