@@ -222,54 +222,6 @@ trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs)
   }
 }
 
-/* Read from an I/O port mapped to the controller */
-int trs_xebec_in(int port)
-{
-  int v = 0xff;
-
-  if (state.present) {
-    switch (port) {
-    case TRS_XEBEC_PORT:
-      v = xebec_data_in();
-      break;
-    case TRS_XEBEC_STATUS:
-      v = state.status;
-      break;
-    }
-  }
-#if ZBX
-  if (trs_io_debug_flags & XEBECDEBUG1)
-    debug("[PC=%04X] trs_xebec_in(%02X) => %02X\n", Z80_PC, port, v);
-#endif
-  return v;
-}
-
-/* Write to an I/O port mapped to the controller */
-void trs_xebec_out(int port, int value)
-{
-#if ZBX
-  if (trs_io_debug_flags & XEBECDEBUG1)
-    debug("[PC=%04X] trs_xebec_out(%02X), %02X\n", Z80_PC, port, value);
-#endif
-  switch (port) {
-  case TRS_XEBEC_PORT:
-    xebec_data_out(value);
-    break;
-  case TRS_XEBEC_STATUS:
-    /* Any write is a software reset: abort to idle */
-    trs_xebec_init(0);
-    break;
-  case TRS_XEBEC_SELECT:
-    if (state.phase == XEBEC_PH_IDLE) {
-      state.secsize = XEBEC_DEFAULT_SECSIZE;
-      state.phase = XEBEC_PH_DCB;
-      state.dcb_index = 0;
-      state.status = XEBEC_STATUS_DCB;
-    }
-    break;
-  }
-}
-
 /*
  * TCS Genie IIIs onboard host adapter at ports 0x00-0x02 (see
  * trs_xebec.h): same controller, rawer bus interface. GDOS 2.4's driver

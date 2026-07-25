@@ -30,21 +30,18 @@
  * believed to be the controller genuinely used by the TCS Genie IIIs'
  * built-in hard disk (GDOS 2.4, Klaus Kaempf's CP/M port).
  *
- * Command set (class/opcode values) is taken from the real Xebec S1410A
- * Owner's Manual. The port map and status register bit layout are taken
- * directly from the "COND SASI ;Xebec part" conditional-assembly block of
- * Thomas Holte's CP/M 3.0 BIOS driver (hd2.mac) -- the same source
- * trs_omti.h's ports were reverse-engineered from. That source confirms
- * Xebec shares the exact same base port as OMTI (0x40): on real hardware
- * these are mutually exclusive alternatives on the same host-adapter slot
- * (only one controller chip is ever physically installed), never present
- * simultaneously -- see trs_io.c's GENIE3S dispatch, which routes
- * 0x40-0x42 to whichever of trs_omti/trs_xebec actually has an image
- * attached.
+ * Command set (class/opcode values) and the status-register bit layout are
+ * taken from the real Xebec S1410A Owner's Manual. On the Genie IIIs the
+ * Xebec is reached only through the TCS onboard SASI adapter at ports
+ * 0x00-0x02 (used by GDOS 2.4 and, on the same convention, Holte's CP/M
+ * port with the original EPROM). The 0x40-0x43 range belongs exclusively to
+ * the OMTI controller (trs_omti.h), never the Xebec -- OMTI and Xebec are
+ * still mutually-exclusive alternatives (only one controller chip is ever
+ * fitted). See trs_io.c's GENIE3S dispatch, gated on the active controller.
  *
  * DCB addressing (flat logical block number rather than OMTI's raw
- * cylinder/head/sector) and the two-byte completion status are unique to
- * this protocol and come from the manual, not from hd2.mac.
+ * cylinder/head/sector) and the two-byte completion status come from the
+ * manual.
  */
 
 #ifndef _TRS_XEBEC_H
@@ -53,8 +50,6 @@
 extern void  trs_xebec_init(int poweron);
 extern void  trs_xebec_attach(int drive, const char *diskname);
 extern void  trs_xebec_remove(int drive);
-extern int   trs_xebec_in(int port);
-extern void  trs_xebec_out(int port, int value);
 extern int   trs_xebec_tcs_in(int port);
 extern void  trs_xebec_tcs_out(int port, int value);
 extern const char *trs_xebec_getfilename(int unit);
@@ -64,27 +59,15 @@ extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
 #define TRS_XEBEC_MAXDRIVES 2 /* SASI 1-bit LUN (hd2.mac MAXDRIVE) addresses 2 units */
 
 /*
- * Port map, relative to base 0x40 -- shared with OMTI (trs_omti.h), per
- * hd2.mac's WPORT0-2/RPORT0-1 equates. Only 3 ports are used (no 4th
- * "mask" register like OMTI's TRS_OMTI_MASK).
- */
-#define TRS_XEBEC_PORT   0x40 /* WPORT0/RPORT0: data (read/write) */
-#define TRS_XEBEC_STATUS 0x41 /* WPORT1: software reset (write) / RPORT1: status (read) */
-#define TRS_XEBEC_SELECT 0x42 /* WPORT2: controller select (write only, no read) */
-
-/*
- * Second host-adapter interface: the TCS Genie IIIs' own onboard SASI
- * adapter at ports 0x00-0x02, as used by GDOS 2.4's resident hard-disk
- * driver (reverse-engineered from a live disassembly of the driver at
- * F000h-F4FFh on a booted G3S-GDOS24.DMK; selection routine at F1B6h).
- * It is a much rawer adapter than Holte's 0x40-0x42 one: the same
- * REQ/BUSY/CD/IO status bits (identical bit positions -- both boards
- * expose the raw SASI control signals), but selection is done the real
- * SASI way: the host writes the controller ID (01h) to the data port,
- * reads it back to verify the bus, then pulses SEL via port 2 and waits
- * for the controller to assert BUSY. A write to port 1 releases the bus.
- * Data-phase transfers are auto-handshaked 256-byte INIR/OTIR bursts
- * (GDOS runs the S1410 with 256-byte sectors; Holte's CP/M used 512).
+ * Host-adapter interface: the TCS Genie IIIs' own onboard SASI adapter at
+ * ports 0x00-0x02, as used by GDOS 2.4's resident hard-disk driver
+ * (reverse-engineered from a live disassembly of the driver at F000h-F4FFh
+ * on a booted G3S-GDOS24.DMK; selection routine at F1B6h). Selection is
+ * done the real SASI way: the host writes the controller ID (01h) to the
+ * data port, reads it back to verify the bus, then pulses SEL via port 2
+ * and waits for the controller to assert BUSY. A write to port 1 releases
+ * the bus. Data-phase transfers are auto-handshaked 256-byte INIR/OTIR
+ * bursts (GDOS runs the S1410 with 256-byte sectors).
  */
 #define TRS_XEBEC_TCS_DATA 0x00 /* SASI data bus (read/write) */
 #define TRS_XEBEC_TCS_CTRL 0x01 /* read: status bits / write: deselect (bus release) */
@@ -93,7 +76,7 @@ extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
 #define TRS_XEBEC_TCS_SECSIZE 256
 
 /*
- * Status register bits polled at TRS_XEBEC_STATUS, per hd2.mac's
+ * Status register bits polled at TRS_XEBEC_TCS_CTRL, per hd2.mac's
  * REQMASK/BUSYMASK/CDMASK/IOMASK equates (which also match the Xebec
  * manual's own sample Z80 driver code, CDBIT/CDMASK/IOBIT/IOMASK).
  * Standard SASI phase encoding: C/D and I/O together select the phase.
@@ -131,7 +114,7 @@ extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
 
 /*
  * Next-to-last completion status byte (first of the two bytes read back
- * from TRS_XEBEC_PORT once the status phase is reached). The second
+ * from TRS_XEBEC_TCS_DATA once the status phase is reached). The second
  * (last) status byte is always zero -- it just signals "done" to the
  * host. Error bit confirmed against hd2.mac's own ERROR equate (02H).
  */
