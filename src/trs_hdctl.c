@@ -1,11 +1,15 @@
 /*
- * Generic hard-disk controller dispatch.  See trs_hdctl.h for rationale:
- * route a (controller-type, unit) pair to the matching WD1000/OMTI/Xebec
- * backend so callers need not special-case each controller.
+ * Hard-disk slots.  See trs_hdctl.h for rationale: a slot holds an image,
+ * not a controller, so attaching or removing one has to reach every
+ * backend that can address that unit.  The image itself lives once, in the
+ * shared slot table (trs_hard_image.h); these calls only keep each
+ * backend's own bookkeeping — its open file handle and decoded geometry —
+ * consistent with it.
  */
 
 #include <stddef.h>
 #include "trs_hard.h"
+#include "trs_hard_image.h"
 #include "trs_hdctl.h"
 #include "trs_mkdisk.h"
 #include "trs_omti.h"
@@ -13,86 +17,48 @@
 
 int hdctl_is_hard_type(int type)
 {
-  return type == HARD_DRIVE || type == OMTI_DRIVE || type == XEBEC_DRIVE;
+  return type == HARD_DRIVE;
 }
 
-/* 0 = no explicit choice pinned yet; otherwise a hard-controller type. */
-static int active_type;
-
-void hdctl_set_active(int type)
+int hdctl_maxdrives(void)
 {
-  if (hdctl_is_hard_type(type))
-    active_type = type;
+  return HARD_IMAGE_SLOTS;
 }
 
-int hdctl_get_active(void)
+int hdctl_slot_wd1000_only(int unit)
 {
-  if (hdctl_is_hard_type(active_type))
-    return active_type;
-
-  /* Nothing pinned: infer from attached images, preferring the SASI
-     controllers the Genie IIIs actually uses (Xebec first, as it is the
-     genuine hardware). */
-  if (hdctl_getfilename(XEBEC_DRIVE, 0)[0] != 0)
-    return XEBEC_DRIVE;
-  if (hdctl_getfilename(OMTI_DRIVE, 0)[0] != 0)
-    return OMTI_DRIVE;
-  return HARD_DRIVE;
+  return unit >= TRS_OMTI_MAXDRIVES && unit >= TRS_XEBEC_MAXDRIVES;
 }
 
-int hdctl_maxdrives(int type)
+void hdctl_attach(int unit, const char *filename)
 {
-  switch (type) {
-    case HARD_DRIVE:  return TRS_HARD_MAXDRIVES;
-    case OMTI_DRIVE:  return TRS_OMTI_MAXDRIVES;
-    case XEBEC_DRIVE: return TRS_XEBEC_MAXDRIVES;
-    default:          return 0;
-  }
+  if (unit < TRS_HARD_MAXDRIVES)  trs_hard_attach(unit, filename);
+  if (unit < TRS_OMTI_MAXDRIVES)  trs_omti_attach(unit, filename);
+  if (unit < TRS_XEBEC_MAXDRIVES) trs_xebec_attach(unit, filename);
 }
 
-void hdctl_attach(int type, int unit, const char *filename)
+void hdctl_remove(int unit)
 {
-  switch (type) {
-    case HARD_DRIVE:  trs_hard_attach(unit, filename);  break;
-    case OMTI_DRIVE:  trs_omti_attach(unit, filename);  break;
-    case XEBEC_DRIVE: trs_xebec_attach(unit, filename); break;
-  }
+  if (unit < TRS_HARD_MAXDRIVES)  trs_hard_remove(unit);
+  if (unit < TRS_OMTI_MAXDRIVES)  trs_omti_remove(unit);
+  if (unit < TRS_XEBEC_MAXDRIVES) trs_xebec_remove(unit);
 }
 
-void hdctl_remove(int type, int unit)
+const char *hdctl_getfilename(int unit)
 {
-  switch (type) {
-    case HARD_DRIVE:  trs_hard_remove(unit);  break;
-    case OMTI_DRIVE:  trs_omti_remove(unit);  break;
-    case XEBEC_DRIVE: trs_xebec_remove(unit); break;
-  }
+  return hard_slot[unit].filename;
 }
 
-const char *hdctl_getfilename(int type, int unit)
+int hdctl_getwriteprotect(int unit)
 {
-  switch (type) {
-    case HARD_DRIVE:  return trs_hard_getfilename(unit);
-    case OMTI_DRIVE:  return trs_omti_getfilename(unit);
-    case XEBEC_DRIVE: return trs_xebec_getfilename(unit);
-    default:          return "";
-  }
+  return hard_slot[unit].writeprot;
 }
 
-int hdctl_getwriteprotect(int type, int unit)
+void hdctl_getgeometry(int unit, int *cyls, int *heads, int *secs)
 {
-  switch (type) {
-    case HARD_DRIVE:  return trs_hard_getwriteprotect(unit);
-    case OMTI_DRIVE:  return trs_omti_getwriteprotect(unit);
-    case XEBEC_DRIVE: return trs_xebec_getwriteprotect(unit);
-    default:          return 0;
-  }
-}
-
-void hdctl_getgeometry(int type, int unit, int *cyls, int *heads, int *secs)
-{
-  switch (type) {
-    case HARD_DRIVE:  trs_hard_getgeometry(unit, cyls, heads, secs);  break;
-    case OMTI_DRIVE:  trs_omti_getgeometry(unit, cyls, heads, secs);  break;
-    case XEBEC_DRIVE: trs_xebec_getgeometry(unit, cyls, heads, secs); break;
+  if (hard_slot[unit].file) {
+    *cyls  = hard_slot[unit].cyls;
+    *heads = hard_slot[unit].heads;
+    *secs  = hard_slot[unit].secs;
   }
 }

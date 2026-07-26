@@ -553,14 +553,10 @@ static void opt_hardctl(const char *arg, int intarg, int *variable)
   (void)intarg;
   (void)variable;
 
-  if (strcasecmp(arg, "omti") == 0)
-    hdctl_set_active(OMTI_DRIVE);
-  else if (strcasecmp(arg, "xebec") == 0)
-    hdctl_set_active(XEBEC_DRIVE);
-  else if (strcasecmp(arg, "wd1000") == 0 || strcasecmp(arg, "wd") == 0)
-    hdctl_set_active(HARD_DRIVE);
-  else
-    error("unknown hardcontroller '%s' (use wd1000, omti or xebec)", arg);
+  /* Accepted and ignored, so existing configs still load.  All three
+     controllers answer on their own fixed ports whenever a disk is
+     fitted; there is nothing to select.  See trs_hdctl.h and #6. */
+  (void)arg;
 }
 
 static void opt_dirname(const char *arg, int intarg, int *stringarg)
@@ -632,21 +628,19 @@ static void opt_file(const char *arg, int intarg, int *stringarg)
       break;
     case 'h':
       if (arg[0])
-        trs_hard_attach(intarg, arg);
+        hdctl_attach(intarg, arg);
       else
-        trs_hard_remove(intarg);
+        hdctl_remove(intarg);
       break;
     case 'o':
-      if (arg[0])
-        trs_omti_attach(intarg, arg);
-      else
-        trs_omti_remove(intarg);
-      break;
     case 'x':
+      /* Legacy -omti<n> / -xebec<n>: hard-disk slots are no longer per
+         controller, so these are just slot <n>.  An empty value is
+         ignored rather than clearing the slot -- under one-slot
+         semantics "no image on that controller" says nothing, and old
+         configs routinely set one controller and blank the others. */
       if (arg[0])
-        trs_xebec_attach(intarg, arg);
-      else
-        trs_xebec_remove(intarg);
+        hdctl_attach(intarg, arg);
       break;
     case 'w':
       if (arg[0])
@@ -918,14 +912,8 @@ int trs_load_config_file(void)
   for (i = 0; i < 8; i++)
     trs_disk_remove(i);
 
-  for (i = 0; i < TRS_HARD_MAXDRIVES; i++)
-    trs_hard_remove(i);
-
-  for (i = 0; i < TRS_OMTI_MAXDRIVES; i++)
-    trs_omti_remove(i);
-
-  for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++)
-    trs_xebec_remove(i);
+  for (i = 0; i < hdctl_maxdrives(); i++)
+    hdctl_remove(i);
 
   for (i = 0; i < 8; i++)
     stringy_remove(i);
@@ -1166,17 +1154,11 @@ int trs_write_config_file(const char *filename)
       Z80_HALT == 'h' ? "halt"  :
       Z80_HALT == 'r' ? "reset" : "");
 
-  for (i = 0; i < TRS_HARD_MAXDRIVES; i++)
-    fprintf(config_file, "hard%d\t\t= %s\n", i, trs_hard_getfilename(i));
+  for (i = 0; i < hdctl_maxdrives(); i++)
+    fprintf(config_file, "hard%d\t\t= %s\n", i, hdctl_getfilename(i));
 
-  fprintf(config_file, "hardcontroller\t= %s\n",
-      hdctl_get_active() == OMTI_DRIVE  ? "omti"  :
-      hdctl_get_active() == XEBEC_DRIVE ? "xebec" : "wd1000");
   fprintf(config_file, "harddir\t\t= %s\n", trs_hard_dir);
   fprintf(config_file, "%shdboot\n", option(trs_hd_boot));
-
-  for (i = 0; i < TRS_OMTI_MAXDRIVES; i++)
-    fprintf(config_file, "omti%d\t\t= %s\n", i, trs_omti_getfilename(i));
 
   fprintf(config_file, "%shuffman\n", option(huffman));
   fprintf(config_file, "%shypermem\n", option(hypermem));
@@ -1261,9 +1243,6 @@ int trs_write_config_file(const char *filename)
 
   trs_get_window(&x, &y, &w, &h);
   fprintf(config_file, "window\t\t= %d,%d,%d,%d\n", x, y, w, h);
-
-  for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++)
-    fprintf(config_file, "xebec%d\t\t= %s\n", i, trs_xebec_getfilename(i));
 
   fprintf(config_file, "%sxmem80\n", option(xmem80));
   fprintf(config_file, "year\t\t= %d\n", trs_year);

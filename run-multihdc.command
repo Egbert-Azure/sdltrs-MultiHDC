@@ -9,18 +9,20 @@
 #
 #   1  gdos    GDOS 2.4        standard EPROM  Xebec  g3s-gdos24-xebec-10mb.hdv
 #   2  holte   Holte CP/M 3.0  Sopp EPROM      OMTI   g3s-omti-WORKING.hdv
+#   3  kaempf  Kaempf CP/M 2.2 standard EPROM  Xebec  (floppy only, no HD yet)
 #   4  z3plus  as 2, but on    g3s-omti-Z3Plus.hdv (same system, more tools)
-#
-# (3 was Kaempf's CP/M; retired -- his CP/M 3.0 disk has no Winchester init
-# utility, and the 2.2X "cpm22x" disks are Genie III, a different machine.)
 #
 # Usage:
 #   ./run-multihdc.command          # menu -- this is what a Finder double-click gets
-#   ./run-multihdc.command gdos     # or 1 / holte / 2 / z3plus / 4
+#   ./run-multihdc.command gdos     # or 1 / holte / 2 / kaempf / 3 / z3plus / 4
 #
-# Each scenario writes its own run-<name>.t8c and passes every disk/hard/omti/
-# xebec slot explicitly, so ~/.sdltrs.t8c is never read and nothing stale from
-# a previous session leaks in. It builds first if the binary is missing.
+# Each scenario writes its own run-<name>.t8c and passes every floppy and
+# hard-disk slot explicitly, so ~/.sdltrs.t8c is never read and nothing stale
+# from a previous session leaks in. It builds first if the binary is missing.
+#
+# The controller column is a fact about the disk, not a setting: all three
+# controllers answer on their own fixed ports, and the OS on the disk picks
+# the one it talks to.
 # ---------------------------------------------------------------------------
 
 set -e
@@ -45,6 +47,7 @@ if [ -z "$choice" ]; then
   echo
   echo "  1  GDOS 2.4         standard EPROM   Xebec   drives 5/6"
   echo "  2  Holte CP/M 3.0   Sopp EPROM       OMTI    boots from HD, C: and D:"
+  echo "  3  Kaempf CP/M 2.2   standard EPROM   Xebec   boots from floppy"
   echo "  4  Holte CP/M 3.0   Sopp EPROM       OMTI    Z3Plus image (more tools)"
   echo
   read -r -p "Choice [1]: " choice
@@ -74,6 +77,27 @@ Try:  PD 5      (also GENDIR 5 / DIR 5; HDFORMAT, confirm with JA, to reformat)"
 loader, RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3, 60K TPA, then C>.
 C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
     ;;
+  3|kaempf|kämpf|cpm22)
+    NAME="kaempf-xebec"
+    LABEL="Kaempf CP/M 2.2 -- standard EPROM, Xebec controller"
+    ROM="$ROM_STD"
+    CTL="xebec"
+    FLOPPY="$REPO/dmk-working/g3s-kaempf-cpm22.dmk"
+    HDV=""
+    HINT="Klaus Kaempf's Genie IIIs CP/M 2.2 (CBIOS 2.6 vom 3.3.85). Boots from floppy.
+Its CBIOS finds and initialises the Xebec at boot over ports 0x00-0x02 -- the
+'Initialisiere Winchester' line -- and the disk carries the hard-disk tooling:
+CONFIG (drive letters, incl. seven 'Winchesterteile'), WNFORMAT, FINDBAD, PDRIVE.
+
+No hard-disk image is attached: bringing a drive up from here is unfinished work,
+and the last attempt never wrote a byte to the image. To pick it up again, make a
+blank sized to what this CBIOS declares at boot (INITIALIZE DRIVE CHARACTERISTICS
+says 321 cylinders, 4 heads; over the TCS adapter the S1410 uses 256-byte sectors,
+so 321 x 4 x 32 = 41088 sectors), attach it with -hard0, and run CONFIG before
+WNFORMAT -- the two prior attempts skipped CONFIG.
+
+Note CONFIG saves to drive A:, i.e. it writes to the floppy image itself."
+    ;;
   4|z3plus|z3)
     NAME="holte-omti-z3plus"
     LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller (Z3Plus image)"
@@ -84,7 +108,7 @@ C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
     HINT="Same as test 2, on the Z3Plus image -- same system, more tools installed."
     ;;
   *)
-    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 4/z3plus)."
+    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 3/kaempf, 4/z3plus)."
     ;;
 esac
 
@@ -96,8 +120,9 @@ if [ ! -x "$BIN" ]; then
 fi
 
 # --- sanity-check the assets so a typo gives a message, not a silent boot ---
-CHECK=("$ROM" "$HDV")
+CHECK=("$ROM")
 [ -n "$FLOPPY" ] && CHECK+=("$FLOPPY")
+[ -n "$HDV" ] && CHECK+=("$HDV")
 for f in "${CHECK[@]}"; do
   [ -f "$f" ] || die "Missing file: $f"
 done
@@ -107,33 +132,26 @@ CFG="$REPO/run-$NAME.t8c"
 cat > "$CFG" <<EOF
 model=1
 romfile1=$ROM
-hardcontroller=$CTL
 EOF
 
 echo "== $LABEL =="
 echo "  ROM:        $ROM"
-echo "  controller: $CTL"
+echo "  controller: $CTL (reached by the guest OS; not a setting)"
 echo "  floppy0:    ${FLOPPY:-(none -- booting from hard disk)}"
-echo "  hard disk:  $HDV"
+echo "  hard disk:  ${HDV:-(none attached)}"
 echo
 echo "$HINT"
 echo
 echo "Alt-D / Alt-F: floppy management   Alt-H: hard-disk management"
 echo
 
-# Only the active controller's slot gets the image; every other slot is
-# cleared explicitly.
-if [ "$CTL" = "xebec" ]; then
-  CTL_ARGS=(-xebec0 "$HDV" -xebec1 "" -omti0 "" -omti1 "")
-else
-  CTL_ARGS=(-omti0 "$HDV" -omti1 "" -xebec0 "" -xebec1 "")
-fi
-
+# A hard-disk slot holds an image, not a controller: the image goes in
+# slot 0 and whichever controller the guest's OS drives serves it.  The
+# remaining slots are cleared explicitly so nothing stale leaks in.
 "$BIN" "$CFG" \
   -disk0 "$FLOPPY" -disk1 "" -disk2 "" -disk3 "" \
   -disk4 "" -disk5 "" -disk6 "" -disk7 "" \
-  "${CTL_ARGS[@]}" \
-  -hard0 "" -hard1 "" -hard2 "" -hard3 "" \
+  -hard0 "$HDV" -hard1 "" -hard2 "" -hard3 "" \
   -nofullscreen
 
 echo

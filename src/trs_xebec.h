@@ -35,9 +35,10 @@
  * Xebec is reached only through the TCS onboard SASI adapter at ports
  * 0x00-0x02 (used by GDOS 2.4 and, on the same convention, Holte's CP/M
  * port with the original EPROM). The 0x40-0x43 range belongs exclusively to
- * the OMTI controller (trs_omti.h), never the Xebec -- OMTI and Xebec are
- * still mutually-exclusive alternatives (only one controller chip is ever
- * fitted). See trs_io.c's GENIE3S dispatch, gated on the active controller.
+ * the OMTI controller (trs_omti.h), never the Xebec -- on real hardware only
+ * one controller chip is ever fitted, but the two ranges are disjoint, so
+ * trs_io.c's GENIE3S dispatch just routes each range to its own controller
+ * and nothing arbitrates between them.
  *
  * DCB addressing (flat logical block number rather than OMTI's raw
  * cylinder/head/sector) and the two-byte completion status come from the

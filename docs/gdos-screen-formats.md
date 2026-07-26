@@ -1,4 +1,4 @@
-<!-- /gdos-screen-formats.md -->
+<!-- /docs/gdos-screen-formats.md -->
 
 # G-DOS 2.4 — screen formats
 

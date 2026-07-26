@@ -34,6 +34,30 @@ typedef struct {
 } HardImage;
 
 /*
+ * The machine's hard-disk slots.
+ *
+ * A slot holds a disk image, not a controller.  A real Genie IIIs has one
+ * hard-disk controller fitted and the operating system on the disk decides
+ * which one it addresses, so the user has no reason to say it twice: the
+ * three backends all read and write these same slots, and whichever
+ * controller the guest drives is the one that serves them.  The count is
+ * the WD1000's, the largest of the three; the SASI controllers reach only
+ * units 0 and 1, which their own 1-bit LUN already enforces.
+ */
+#define HARD_IMAGE_SLOTS 4
+
+extern HardImage hard_slot[HARD_IMAGE_SLOTS];
+
+/*
+ * Is a hard disk fitted?  True once any slot has an image open.  The three
+ * backends share this rather than each latching its own flag at power-on,
+ * so a disk attached from the GUI takes effect immediately instead of
+ * waiting for a reset, and an empty machine reads back 0xFF on every
+ * controller's ports.
+ */
+extern int hard_image_present(void);
+
+/*
  * (Re)open d->filename, parse its Reed header, and fill in d->writeprot
  * and the geometry fields.
  *
@@ -57,5 +81,13 @@ extern int hard_image_open(HardImage *d, int unit, const char *label,
  */
 extern long hard_image_offset(const HardImage *d, int secsize,
                               int cyl, int head, int sec);
+
+/*
+ * Save / restore the slot table.  The slots belong to the machine, not to
+ * any one controller, so they are serialised here once rather than by each
+ * backend in turn.
+ */
+extern void hard_image_save(FILE *file);
+extern void hard_image_load(FILE *file);
 
 #endif /* _TRS_HARD_IMAGE_H */

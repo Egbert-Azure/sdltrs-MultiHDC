@@ -11,6 +11,22 @@
 #include "error.h"
 #include "reed.h"
 #include "trs_hard_image.h"
+#include "trs_state_save.h"
+
+/* The machine's hard-disk slots, shared by all three controller backends.
+   See trs_hard_image.h. */
+HardImage hard_slot[HARD_IMAGE_SLOTS];
+
+int hard_image_present(void)
+{
+  int i;
+
+  for (i = 0; i < HARD_IMAGE_SLOTS; i++)
+    if (hard_slot[i].file != NULL)
+      return 1;
+
+  return 0;
+}
 
 int hard_image_open(HardImage *d, int unit, const char *label,
                     int sec_per_trk, int maxheads)
@@ -85,4 +101,58 @@ long hard_image_offset(const HardImage *d, int secsize,
 {
   return sizeof(ReedHardHeader) +
          (long)secsize * ((cyl * d->heads + head) * d->secs + sec);
+}
+
+void hard_image_save(FILE *file)
+{
+  int i;
+
+  for (i = 0; i < HARD_IMAGE_SLOTS; i++) {
+    HardImage *d = &hard_slot[i];
+    int file_not_null = (d->file != NULL);
+
+    trs_save_int(file, &file_not_null, 1);
+    trs_save_filename(file, d->filename);
+    trs_save_int(file, &d->writeprot, 1);
+    trs_save_int(file, &d->cyls, 1);
+    trs_save_int(file, &d->heads, 1);
+    trs_save_int(file, &d->secs, 1);
+  }
+}
+
+void hard_image_load(FILE *file)
+{
+  int i;
+
+  for (i = 0; i < HARD_IMAGE_SLOTS; i++) {
+    HardImage *d = &hard_slot[i];
+    int file_not_null;
+
+    if (d->file != NULL)
+      fclose(d->file);
+
+    trs_load_int(file, &file_not_null, 1);
+    d->file = NULL;
+
+    trs_load_filename(file, d->filename);
+    trs_load_int(file, &d->writeprot, 1);
+    trs_load_int(file, &d->cyls, 1);
+    trs_load_int(file, &d->heads, 1);
+    trs_load_int(file, &d->secs, 1);
+
+    if (file_not_null == 0)
+      continue;
+
+    /* Reopen the image the saved state had open, read-write if we can. */
+    d->file = fopen(d->filename, "rb+");
+    if (d->file != NULL) {
+      d->writeprot = 0;
+    } else if ((d->file = fopen(d->filename, "rb")) != NULL) {
+      d->writeprot = 1;
+    } else {
+      file_error("load hard%d: '%s'", i, d->filename);
+      d->filename[0] = 0;
+      d->writeprot = 0;
+    }
+  }
 }
