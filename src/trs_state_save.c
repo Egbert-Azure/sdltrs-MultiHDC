@@ -29,12 +29,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "error.h"
-#include "trs_hdctl.h"
+#include "trs_hard_image.h"
 #include "trs_state_save.h"
 
 static const char stateFileBanner[] = "SDLTRS State Save File";
 static int const stateFileBannerLen = sizeof(stateFileBanner) - 1;
-static unsigned const stateVersionNumber = 17;
+static unsigned const stateVersionNumber = 18;
 
 int trs_state_save(const char *filename)
 {
@@ -48,10 +48,10 @@ int trs_state_save(const char *filename)
     trs_clone_save(file);
     trs_cp500_save(file);
     trs_disk_save(file);
+    hard_image_save(file);
     trs_hard_save(file);
     trs_omti_save(file);
     trs_xebec_save(file);
-    { int ctl = hdctl_get_active(); trs_save_int(file, &ctl, 1); }
     trs_stringy_save(file);
     trs_interrupt_save(file);
     trs_io_save(file);
@@ -98,10 +98,10 @@ int trs_state_load(const char *filename)
     trs_clone_load(file);
     trs_cp500_load(file);
     trs_disk_load(file);
+    hard_image_load(file);
     trs_hard_load(file);
     trs_omti_load(file);
     trs_xebec_load(file);
-    { int ctl; trs_load_int(file, &ctl, 1); hdctl_set_active(ctl); }
     trs_stringy_load(file);
     trs_interrupt_load(file);
     trs_io_load(file);

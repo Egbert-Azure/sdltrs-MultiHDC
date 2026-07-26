@@ -89,7 +89,6 @@ typedef enum {
 
 /* Structure describing controller state */
 typedef struct {
-  int present;
   XebecPhase phase;
   Uint8 status;
 
@@ -114,7 +113,6 @@ typedef struct {
   int sense_valid;      /* sense_lba meaningful (address-valid bit) */
   long sense_lba;       /* block in error, or one past the last block formatted */
 
-  HardImage d[TRS_XEBEC_MAXDRIVES];
 } State;
 
 static State state;
@@ -135,7 +133,7 @@ void trs_xebec_debug(void)
   int i;
 
   printf("Xebec hard disk controller state:");
-  if (state.present == 0) {
+  if (hard_image_present() == 0) {
     puts(" DISABLED");
     return;
   }
@@ -144,11 +142,11 @@ void trs_xebec_debug(void)
       state.phase, state.lun, state.command, state.status, state.secsize);
 
   for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
-    if (state.d[i].file) {
-      printf("\nxebec%d: '%s'\n", i, state.d[i].filename);
+    if (hard_slot[i].file) {
+      printf("\nxebec%d: '%s'\n", i, hard_slot[i].filename);
       printf("\theads %d, cyls %4d, secs %4d, writeprot %d\n",
-          state.d[i].heads, state.d[i].cyls, state.d[i].secs,
-          state.d[i].writeprot);
+          hard_slot[i].heads, hard_slot[i].cyls, hard_slot[i].secs,
+          hard_slot[i].writeprot);
     }
   }
 }
@@ -173,24 +171,23 @@ void trs_xebec_init(int poweron)
   if (poweron) {
     int i;
 
-    state.present = 0;
     state.secsize = XEBEC_DEFAULT_SECSIZE;
     memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
-      state.d[i].writeprot = 0;
-      state.d[i].cyls = 0;
-      state.d[i].heads = 0;
-      state.d[i].secs = 0;
+      hard_slot[i].writeprot = 0;
+      hard_slot[i].cyls = 0;
+      hard_slot[i].heads = 0;
+      hard_slot[i].secs = 0;
 
-      if (xebec_open(i) == 0) state.present = 1;
+      xebec_open(i);
     }
   }
 }
 
 void trs_xebec_attach(int drive, const char *diskname)
 {
-  snprintf(state.d[drive].filename, FILENAME_MAX, "%s", diskname);
+  snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
 
   if (xebec_open(drive) != 0)
     trs_xebec_remove(drive);
@@ -198,36 +195,36 @@ void trs_xebec_attach(int drive, const char *diskname)
 
 void trs_xebec_remove(int drive)
 {
-  if (state.d[drive].file != NULL)
-    fclose(state.d[drive].file);
+  if (hard_slot[drive].file != NULL)
+    fclose(hard_slot[drive].file);
 
-  state.d[drive].filename[0] = 0;
-  state.d[drive].file = NULL;
-  state.d[drive].writeprot = 0;
-  state.d[drive].cyls = 0;
-  state.d[drive].heads = 0;
-  state.d[drive].secs = 0;
+  hard_slot[drive].filename[0] = 0;
+  hard_slot[drive].file = NULL;
+  hard_slot[drive].writeprot = 0;
+  hard_slot[drive].cyls = 0;
+  hard_slot[drive].heads = 0;
+  hard_slot[drive].secs = 0;
 }
 
 const char*
 trs_xebec_getfilename(int unit)
 {
-  return state.d[unit].filename;
+  return hard_slot[unit].filename;
 }
 
 int
 trs_xebec_getwriteprotect(int unit)
 {
-  return state.d[unit].writeprot;
+  return hard_slot[unit].writeprot;
 }
 
 void
 trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs)
 {
-  if (state.d[unit].file) {
-    *cyls = state.d[unit].cyls;
-    *head = state.d[unit].heads;
-    *secs = state.d[unit].secs;
+  if (hard_slot[unit].file) {
+    *cyls = hard_slot[unit].cyls;
+    *head = hard_slot[unit].heads;
+    *secs = hard_slot[unit].secs;
   }
 }
 
@@ -241,7 +238,7 @@ int trs_xebec_tcs_in(int port)
 {
   int v = 0xff;
 
-  if (state.present) {
+  if (hard_image_present()) {
     switch (port) {
     case TRS_XEBEC_TCS_DATA:
       v = state.phase == XEBEC_PH_IDLE ? state.busdata : xebec_data_in();
@@ -266,7 +263,7 @@ void trs_xebec_tcs_out(int port, int value)
 #endif
   /* No image attached: no card in the machine, so ignore writes -- the
    * matching reads in trs_xebec_tcs_in() already float high. */
-  if (state.present == 0)
+  if (hard_image_present() == 0)
     return;
 
   switch (port) {
@@ -329,7 +326,7 @@ static void xebec_fail(int code, int addr_valid, long lba)
  */
 static long xebec_capacity(int lun)
 {
-  const HardImage *d = &state.d[lun];
+  const HardImage *d = &hard_slot[lun];
 
   return (long)d->cyls * d->heads * d->secs;
 }
@@ -361,7 +358,7 @@ static long xebec_capacity(int lun)
  */
 static int xebec_format(int lun, long lba, int to_end_of_drive)
 {
-  HardImage *d = &state.d[lun];
+  HardImage *d = &hard_slot[lun];
   const Uint8 *pattern;
   long first, last, blk;
 
@@ -437,7 +434,7 @@ static void xebec_command(void)
 
   /* LUN is a 1-bit field in the DCB, so guest software can address a
    * second unit even though only TRS_XEBEC_MAXDRIVES is emulated: treat
-   * it as not-present rather than indexing state.d[] out of bounds. */
+   * it as not-present rather than indexing hard_slot[] out of bounds. */
   if (state.lun >= TRS_XEBEC_MAXDRIVES) {
     xebec_fail(TRS_XEBEC_ERR_NOT_READY, 0, 0);
     return;
@@ -449,7 +446,7 @@ static void xebec_command(void)
   switch (state.command) {
   case TRS_XEBEC_READ:
     if (xebec_seek(state.lun, lba) == 0) {
-      FILE *f = state.d[state.lun].file;
+      FILE *f = hard_slot[state.lun].file;
 
       if (f && fread(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
         if (ferror(f)) {
@@ -500,12 +497,12 @@ static void xebec_command(void)
      * image has no ID fields and cannot be unformatted, so any track
      * inside the drive's geometry checks out. Sense reports one block
      * past the checked track, as after a format. */
-    if (state.d[state.lun].file == NULL && xebec_open(state.lun) != 0) {
+    if (hard_slot[state.lun].file == NULL && xebec_open(state.lun) != 0) {
       xebec_fail(TRS_XEBEC_ERR_NOT_READY, 0, 0);
     } else if (lba >= xebec_capacity(state.lun)) {
       xebec_fail(TRS_XEBEC_ERR_BAD_ADDR, 1, lba);
     } else {
-      state.sense_lba = lba + state.d[state.lun].secs;
+      state.sense_lba = lba + hard_slot[state.lun].secs;
       state.sense_valid = 1;
       xebec_finish(0);
     }
@@ -543,7 +540,7 @@ static void xebec_command(void)
     break;
 
   case TRS_XEBEC_TEST_DRIVE_READY:
-    xebec_finish(state.d[state.lun].file != NULL ||
+    xebec_finish(hard_slot[state.lun].file != NULL ||
                 xebec_open(state.lun) == 0 ? 0 : -1);
     break;
 
@@ -598,7 +595,7 @@ static void xebec_data_out(int value)
       state.buf[state.bytesdone++] = (Uint8)value;
       if (state.bytesdone == state.datalen) {
         if (state.command == TRS_XEBEC_WRITE) {
-          FILE *f = state.d[state.lun].file;
+          FILE *f = hard_slot[state.lun].file;
 
           if (f && fwrite(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
             if (errno) {
@@ -629,8 +626,8 @@ static void xebec_data_out(int value)
               (state.buf[TRS_XEBEC_CHAR_CYLHI] << 8) |
                   state.buf[TRS_XEBEC_CHAR_CYLLO],
               state.buf[TRS_XEBEC_CHAR_HEADS],
-              state.d[state.lun].cyls, state.d[state.lun].heads,
-              state.d[state.lun].secs);
+              hard_slot[state.lun].cyls, hard_slot[state.lun].heads,
+              hard_slot[state.lun].secs);
 #endif
         xebec_finish(0);
       }
@@ -653,7 +650,7 @@ static int xebec_data_in(void)
         if (state.command == TRS_XEBEC_READ && --state.blocks > 0) {
           /* More sectors in this command: refill the buffer from the
            * next sector, file position is already there */
-          FILE *f = state.d[state.lun].file;
+          FILE *f = hard_slot[state.lun].file;
 
           if (f && fread(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
             if (ferror(f)) {
@@ -698,7 +695,7 @@ static int xebec_data_in(void)
  */
 static int xebec_seek(int lun, long lba)
 {
-  HardImage *d = &state.d[lun];
+  HardImage *d = &hard_slot[lun];
   long cyl, head, sector;
 
   if (d->file == NULL && xebec_open(lun) != 0) return -1;
@@ -727,7 +724,7 @@ static int xebec_seek(int lun, long lba)
  */
 static int xebec_open(int drive)
 {
-  HardImage *d = &state.d[drive];
+  HardImage *d = &hard_slot[drive];
 
   if (hard_image_open(d, drive, "xebec",
                       XEBEC_SEC_PER_TRK, XEBEC_MAXHEADS) != 0)
@@ -737,39 +734,10 @@ static int xebec_open(int drive)
   return 0;
 }
 
-static void trs_save_xebecdrive(FILE *file, HardImage *d)
-{
-  int file_not_null = (d->file != NULL);
-
-  trs_save_int(file, &file_not_null, 1);
-  trs_save_filename(file, d->filename);
-  trs_save_int(file, &d->writeprot, 1);
-  trs_save_int(file, &d->cyls, 1);
-  trs_save_int(file, &d->heads, 1);
-  trs_save_int(file, &d->secs, 1);
-}
-
-static void trs_load_xebecdrive(FILE *file, HardImage *d)
-{
-  int file_not_null;
-
-  trs_load_int(file, &file_not_null, 1);
-
-  d->file = file_not_null ? (FILE *) 1 : NULL;
-
-  trs_load_filename(file, d->filename);
-  trs_load_int(file, &d->writeprot, 1);
-  trs_load_int(file, &d->cyls, 1);
-  trs_load_int(file, &d->heads, 1);
-  trs_load_int(file, &d->secs, 1);
-}
-
 void trs_xebec_save(FILE *file)
 {
-  int i;
   int phase = (int)state.phase;
 
-  trs_save_int(file, &state.present, 1);
   trs_save_int(file, &phase, 1);
   trs_save_uint8(file, &state.status, 1);
   trs_save_uint8(file, state.dcb, TRS_XEBEC_DCBLEN);
@@ -785,22 +753,12 @@ void trs_xebec_save(FILE *file)
   trs_save_uint8(file, &state.busdata, 1);
   trs_save_uint8(file, &state.final_status, 1);
   trs_save_int(file, &state.status_index, 1);
-
-  for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++)
-    trs_save_xebecdrive(file, &state.d[i]);
 }
 
 void trs_xebec_load(FILE *file)
 {
-  int i;
   int phase;
 
-  for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
-    if (state.d[i].file != NULL)
-      fclose(state.d[i].file);
-  }
-
-  trs_load_int(file, &state.present, 1);
   trs_load_int(file, &phase, 1);
   state.phase = (XebecPhase)phase;
   trs_load_uint8(file, &state.status, 1);
@@ -818,23 +776,4 @@ void trs_xebec_load(FILE *file)
   trs_load_uint8(file, &state.final_status, 1);
   trs_load_int(file, &state.status_index, 1);
 
-  for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
-    trs_load_xebecdrive(file, &state.d[i]);
-
-    if (state.d[i].file != NULL) {
-      state.d[i].file = fopen(state.d[i].filename, "rb+");
-      if (state.d[i].file == NULL) {
-        state.d[i].file = fopen(state.d[i].filename, "rb");
-        if (state.d[i].file == NULL) {
-          file_error("load xebec%d: '%s'", i, state.d[i].filename);
-          state.d[i].filename[0] = 0;
-          state.d[i].writeprot = 0;
-          continue;
-        }
-        state.d[i].writeprot = 1;
-      } else {
-        state.d[i].writeprot = 0;
-      }
-    }
-  }
 }

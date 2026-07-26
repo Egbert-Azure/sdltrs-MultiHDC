@@ -1,49 +1,47 @@
 /*
- * Generic hard-disk controller dispatch.
+ * Hard-disk slots.
  *
- * The emulator has three hard-disk controller backends — WD1000/1010
- * (trs_hard.c), OMTI 5527 (trs_omti.c) and Xebec S1410 (trs_xebec.c) —
- * each with its own attach/remove/getfilename/geometry entry points.  The
- * GUI, config and write-protect code shouldn't care which one a given
- * drive slot belongs to; these helpers dispatch a (controller-type, unit)
- * pair to the right backend so callers can treat all hard-disk slots
- * uniformly.
+ * A slot holds a disk image, not a controller.  The emulator has three
+ * hard-disk controller backends — WD1000/1010 (trs_hard.c), OMTI 5527
+ * (trs_omti.c) and Xebec S1410 (trs_xebec.c) — but they are three ways of
+ * reaching the same disks, not three sets of disks.  A real Genie IIIs has
+ * exactly one controller fitted and the operating system on the disk
+ * decides which one it addresses; the user has no reason to say it again.
+ * So the GUI, config and write-protect code deal in slot numbers alone,
+ * and these helpers keep the backends in step.
  *
- * The controller type is one of the HARD_DRIVE / OMTI_DRIVE / XEBEC_DRIVE
- * constants from trs_mkdisk.h (the same tags the GUI menu rows already
- * carry).  unit is the drive index within that controller.
+ * The three controllers sit at fixed, disjoint port ranges (WD1000
+ * 0x50-0x57, OMTI 0x40-0x43, Xebec 0x00-0x02 on the TCS onboard SASI
+ * adapter) and are wired in independently of one another and of the boot
+ * EPROM, so each answers on its own ports whenever a disk is fitted.
+ * Gating I/O on a user-selected controller was bug #6.
+ *
+ * Slot count is the WD1000's, the largest of the three.  The SASI
+ * controllers reach only units 0 and 1, which their own 1-bit LUN already
+ * enforces — nothing here needs to know that.
  */
 
 #ifndef _TRS_HDCTL_H
 #define _TRS_HDCTL_H
 
-/* True if type is one of the hard-disk controller types. */
+/* True if a menu-row type is the hard-disk one (as opposed to floppy,
+   wafer or cassette). */
 extern int  hdctl_is_hard_type(int type);
 
+/* Number of hard-disk slots the machine has. */
+extern int  hdctl_maxdrives(void);
+
 /*
- * Which controller new images and GUI actions default to (the
- * `hardcontroller=` setting).  hdctl_set_active() pins an explicit choice
- * (GUI / CLI / config); hdctl_get_active() returns that choice, or — if
- * none was pinned — auto-resolves from which backend has an image attached
- * (Xebec, then OMTI, else WD1000).
- *
- * This is a user-interface preference only.  It does NOT gate I/O: the
- * three controllers sit at fixed, disjoint port ranges (WD1000 0x50-0x57,
- * OMTI 0x40-0x43, Xebec 0x00-0x02 on the TCS onboard SASI adapter) and are
- * wired in independently of one another and of the boot EPROM, so each one
- * answers on its own ports whenever it has an image attached, whatever is
- * "active" here.
+ * True if only the WD1000 can reach this slot.  The two SASI controllers
+ * address units 0 and 1 only -- their LUN field is one bit wide -- so a
+ * disk in a higher slot is invisible to a guest driving one of them.
  */
-extern void hdctl_set_active(int type);
-extern int  hdctl_get_active(void);
+extern int  hdctl_slot_wd1000_only(int unit);
 
-/* Number of drive slots this controller exposes (0 if not a hard type). */
-extern int  hdctl_maxdrives(int type);
-
-extern void hdctl_attach(int type, int unit, const char *filename);
-extern void hdctl_remove(int type, int unit);
-extern const char *hdctl_getfilename(int type, int unit);
-extern int  hdctl_getwriteprotect(int type, int unit);
-extern void hdctl_getgeometry(int type, int unit, int *cyls, int *heads, int *secs);
+extern void hdctl_attach(int unit, const char *filename);
+extern void hdctl_remove(int unit);
+extern const char *hdctl_getfilename(int unit);
+extern int  hdctl_getwriteprotect(int unit);
+extern void hdctl_getgeometry(int unit, int *cyls, int *heads, int *secs);
 
 #endif /* _TRS_HDCTL_H */

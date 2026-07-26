@@ -64,7 +64,7 @@ int trs_write_protect(int type, int drive)
   struct stat st = { 0 };
 
   if (hdctl_is_hard_type(type)) {
-    filename = hdctl_getfilename(type, drive);
+    filename = hdctl_getfilename(drive);
   } else switch (type) {
     case DISK_DRIVE:
       filename = trs_disk_getfilename(drive);
@@ -98,8 +98,8 @@ int trs_write_protect(int type, int drive)
   if (hdctl_is_hard_type(type)) {
     /* All three hard controllers store their write-protect flag the same
        way: bit 7 of the Reed header's flag1 byte (offset 7). */
-    writeprot = !hdctl_getwriteprotect(type, drive);
-    hdctl_remove(type, drive);
+    writeprot = !hdctl_getwriteprotect(drive);
+    hdctl_remove(drive);
 
     f = fopen(prot_filename, "r+");
     if (f != NULL) {
@@ -174,7 +174,7 @@ int trs_write_protect(int type, int drive)
   }
 #endif
   if (hdctl_is_hard_type(type)) {
-    hdctl_attach(type, drive, prot_filename);
+    hdctl_attach(drive, prot_filename);
   } else switch (type) {
     case DISK_DRIVE:
       trs_disk_insert(drive, prot_filename);

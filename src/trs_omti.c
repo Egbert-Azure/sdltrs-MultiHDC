@@ -75,7 +75,6 @@ typedef enum {
 
 /* Structure describing controller state */
 typedef struct {
-  int present;
   OmtiPhase phase;
   Uint8 status;
   Uint8 mask;
@@ -92,7 +91,6 @@ typedef struct {
   int secsize;
   Uint8 final_status;
 
-  HardImage d[TRS_OMTI_MAXDRIVES];
 } State;
 
 static State state;
@@ -110,7 +108,7 @@ void trs_omti_debug(void)
   int i;
 
   printf("OMTI hard disk controller state:");
-  if (state.present == 0) {
+  if (hard_image_present() == 0) {
     puts(" DISABLED");
     return;
   }
@@ -119,11 +117,11 @@ void trs_omti_debug(void)
       state.phase, state.lun, state.command, state.status, state.secsize);
 
   for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
-    if (state.d[i].file) {
-      printf("\nomti%d: '%s'\n", i, state.d[i].filename);
+    if (hard_slot[i].file) {
+      printf("\nomti%d: '%s'\n", i, hard_slot[i].filename);
       printf("\theads %d, cyls %4d, secs %4d, writeprot %d\n",
-          state.d[i].heads, state.d[i].cyls, state.d[i].secs,
-          state.d[i].writeprot);
+          hard_slot[i].heads, hard_slot[i].cyls, hard_slot[i].secs,
+          hard_slot[i].writeprot);
     }
   }
 }
@@ -145,7 +143,6 @@ void trs_omti_init(int poweron)
   if (poweron) {
     int i;
 
-    state.present = 0;
     state.mask = 0;
     /* CP/M's directory-empty marker; real OMTI format tooling (e.g.
      * HDNDF.Z80) loads this same byte via WRITE SECTOR BUFFER before
@@ -154,19 +151,19 @@ void trs_omti_init(int poweron)
     memset(state.fillbuf, 0xe5, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
-      state.d[i].writeprot = 0;
-      state.d[i].cyls = 0;
-      state.d[i].heads = 0;
-      state.d[i].secs = 0;
+      hard_slot[i].writeprot = 0;
+      hard_slot[i].cyls = 0;
+      hard_slot[i].heads = 0;
+      hard_slot[i].secs = 0;
 
-      if (omti_open(i) == 0) state.present = 1;
+      omti_open(i);
     }
   }
 }
 
 void trs_omti_attach(int drive, const char *diskname)
 {
-  snprintf(state.d[drive].filename, FILENAME_MAX, "%s", diskname);
+  snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
 
   if (omti_open(drive) != 0)
     trs_omti_remove(drive);
@@ -174,36 +171,36 @@ void trs_omti_attach(int drive, const char *diskname)
 
 void trs_omti_remove(int drive)
 {
-  if (state.d[drive].file != NULL)
-    fclose(state.d[drive].file);
+  if (hard_slot[drive].file != NULL)
+    fclose(hard_slot[drive].file);
 
-  state.d[drive].filename[0] = 0;
-  state.d[drive].file = NULL;
-  state.d[drive].writeprot = 0;
-  state.d[drive].cyls = 0;
-  state.d[drive].heads = 0;
-  state.d[drive].secs = 0;
+  hard_slot[drive].filename[0] = 0;
+  hard_slot[drive].file = NULL;
+  hard_slot[drive].writeprot = 0;
+  hard_slot[drive].cyls = 0;
+  hard_slot[drive].heads = 0;
+  hard_slot[drive].secs = 0;
 }
 
 const char*
 trs_omti_getfilename(int unit)
 {
-  return state.d[unit].filename;
+  return hard_slot[unit].filename;
 }
 
 int
 trs_omti_getwriteprotect(int unit)
 {
-  return state.d[unit].writeprot;
+  return hard_slot[unit].writeprot;
 }
 
 void
 trs_omti_getgeometry(int unit, int *cyls, int *head, int *secs)
 {
-  if (state.d[unit].file) {
-    *cyls = state.d[unit].cyls;
-    *head = state.d[unit].heads;
-    *secs = state.d[unit].secs;
+  if (hard_slot[unit].file) {
+    *cyls = hard_slot[unit].cyls;
+    *head = hard_slot[unit].heads;
+    *secs = hard_slot[unit].secs;
   }
 }
 
@@ -212,7 +209,7 @@ int trs_omti_in(int port)
 {
   int v = 0xff;
 
-  if (state.present) {
+  if (hard_image_present()) {
     switch (port) {
     case TRS_OMTI_PORT:
       v = omti_data_in();
@@ -248,7 +245,7 @@ void trs_omti_out(int port, int value)
 #endif
   /* No image attached: no card in the machine, so ignore writes -- the
    * matching reads in trs_omti_in() already float high. */
-  if (state.present == 0)
+  if (hard_image_present() == 0)
     return;
 
   switch (port) {
@@ -302,7 +299,7 @@ static void omti_command(void)
 
   /* LUN is a 1-bit field in the CDB, so guest software can address a
    * second unit even though only TRS_OMTI_MAXDRIVES is emulated: treat
-   * it as not-present rather than indexing state.d[] out of bounds. */
+   * it as not-present rather than indexing hard_slot[] out of bounds. */
   if (state.lun >= TRS_OMTI_MAXDRIVES) {
     omti_finish(-1);
     return;
@@ -311,7 +308,7 @@ static void omti_command(void)
   switch (state.command) {
   case TRS_OMTI_READ:
     if (omti_seek(state.lun, cyl, head, sector) == 0) {
-      FILE *f = state.d[state.lun].file;
+      FILE *f = hard_slot[state.lun].file;
 
       if (f && fread(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
         if (ferror(f)) {
@@ -340,7 +337,7 @@ static void omti_command(void)
 
   case TRS_OMTI_FORMAT:
     if (omti_seek(state.lun, cyl, head, sector) == 0) {
-      FILE *f = state.d[state.lun].file;
+      FILE *f = hard_slot[state.lun].file;
 
       if (f && fwrite(state.fillbuf, 1, state.secsize, f) != (size_t)state.secsize) {
         if (errno) {
@@ -376,7 +373,7 @@ static void omti_command(void)
     break;
 
   case TRS_OMTI_TEST_UNIT_READY:
-    omti_finish(state.d[state.lun].file != NULL ||
+    omti_finish(hard_slot[state.lun].file != NULL ||
                 omti_open(state.lun) == 0 ? 0 : -1);
     break;
 
@@ -405,7 +402,7 @@ static void omti_data_out(int value)
       state.buf[state.bytesdone++] = (Uint8)value;
       if (state.bytesdone == state.datalen) {
         if (state.command == TRS_OMTI_WRITE) {
-          FILE *f = state.d[state.lun].file;
+          FILE *f = hard_slot[state.lun].file;
 
           if (f && fwrite(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
             if (errno) {
@@ -473,7 +470,7 @@ static int omti_data_in(void)
  */
 static int omti_seek(int lun, int cyl, int head, int sector)
 {
-  HardImage *d = &state.d[lun];
+  HardImage *d = &hard_slot[lun];
 
   if (d->file == NULL && omti_open(lun) != 0) return -1;
 
@@ -510,7 +507,7 @@ static int omti_seek(int lun, int cyl, int head, int sector)
  */
 static int omti_open(int drive)
 {
-  HardImage *d = &state.d[drive];
+  HardImage *d = &hard_slot[drive];
 
   if (hard_image_open(d, drive, "omti",
                       OMTI_SEC_PER_TRK, OMTI_MAXHEADS) != 0)
@@ -526,39 +523,10 @@ static int omti_open(int drive)
   return 0;
 }
 
-static void trs_save_omtidrive(FILE *file, HardImage *d)
-{
-  int file_not_null = (d->file != NULL);
-
-  trs_save_int(file, &file_not_null, 1);
-  trs_save_filename(file, d->filename);
-  trs_save_int(file, &d->writeprot, 1);
-  trs_save_int(file, &d->cyls, 1);
-  trs_save_int(file, &d->heads, 1);
-  trs_save_int(file, &d->secs, 1);
-}
-
-static void trs_load_omtidrive(FILE *file, HardImage *d)
-{
-  int file_not_null;
-
-  trs_load_int(file, &file_not_null, 1);
-
-  d->file = file_not_null ? (FILE *) 1 : NULL;
-
-  trs_load_filename(file, d->filename);
-  trs_load_int(file, &d->writeprot, 1);
-  trs_load_int(file, &d->cyls, 1);
-  trs_load_int(file, &d->heads, 1);
-  trs_load_int(file, &d->secs, 1);
-}
-
 void trs_omti_save(FILE *file)
 {
-  int i;
   int phase = (int)state.phase;
 
-  trs_save_int(file, &state.present, 1);
   trs_save_int(file, &phase, 1);
   trs_save_uint8(file, &state.status, 1);
   trs_save_uint8(file, &state.mask, 1);
@@ -572,22 +540,12 @@ void trs_omti_save(FILE *file)
   trs_save_int(file, &state.datalen, 1);
   trs_save_int(file, &state.secsize, 1);
   trs_save_uint8(file, &state.final_status, 1);
-
-  for (i = 0; i < TRS_OMTI_MAXDRIVES; i++)
-    trs_save_omtidrive(file, &state.d[i]);
 }
 
 void trs_omti_load(FILE *file)
 {
-  int i;
   int phase;
 
-  for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
-    if (state.d[i].file != NULL)
-      fclose(state.d[i].file);
-  }
-
-  trs_load_int(file, &state.present, 1);
   trs_load_int(file, &phase, 1);
   state.phase = (OmtiPhase)phase;
   trs_load_uint8(file, &state.status, 1);
@@ -603,23 +561,4 @@ void trs_omti_load(FILE *file)
   trs_load_int(file, &state.secsize, 1);
   trs_load_uint8(file, &state.final_status, 1);
 
-  for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
-    trs_load_omtidrive(file, &state.d[i]);
-
-    if (state.d[i].file != NULL) {
-      state.d[i].file = fopen(state.d[i].filename, "rb+");
-      if (state.d[i].file == NULL) {
-        state.d[i].file = fopen(state.d[i].filename, "rb");
-        if (state.d[i].file == NULL) {
-          file_error("load omti%d: '%s'", i, state.d[i].filename);
-          state.d[i].filename[0] = 0;
-          state.d[i].writeprot = 0;
-          continue;
-        }
-        state.d[i].writeprot = 1;
-      } else {
-        state.d[i].writeprot = 0;
-      }
-    }
-  }
 }

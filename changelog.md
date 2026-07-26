@@ -2,6 +2,47 @@
 
 # Changelog
 
+## 2026-07-25 — One set of hard-disk slots, no controller to pick (#6)
+
+Follow-on from the port-gating fix below. With the gate gone, the Controller
+dropdown in Alt-H had nothing left to do but split one machine's disks into
+three separate sets of slots — WD1000 `hard0`–`hard3`, OMTI `omti0`/`omti1`,
+Xebec `xebec0`/`xebec1` — which is not how the machine works. A real Genie IIIs
+has one controller fitted and the OS on the disk addresses it; asking the user
+to declare it as well was asking twice for something they cannot get wrong.
+
+**A slot now holds a disk, not a controller.** There is one set of four slots,
+the former WD1000 ones. Whichever controller the guest's OS drives is the one
+that serves them. The two SASI controllers still reach only slots 0 and 1,
+which their own 1-bit LUN enforces without anyone declaring anything.
+
+- `hard_slot[]` in `trs_hard_image.c` is the machine's slot table; all three
+  backends address it directly instead of each keeping `HardImage d[]` of
+  their own. One image, one open file handle, one geometry.
+- The per-backend `present` flags are gone, replaced by `hard_image_present()`
+  over that table. A side effect worth having: a disk attached from the GUI now
+  takes effect immediately, where before the flag was latched at power-on and
+  the controller ignored the disk until the next reset.
+- The slot table is saved once, by the layer that owns it, instead of three
+  times over by three backends. State version 16 → 17.
+- `hdctl_*` lost its controller-type argument throughout; `hdctl_get_active()`
+  / `_set_active()`, and the `OMTI_DRIVE` / `XEBEC_DRIVE` menu-row types, are
+  gone entirely.
+- **Alt-H**: no Controller row, one list of four slots. Slots 2 and 3 are
+  tagged `WD1000 only`, since the SASI controllers' 1-bit LUN reaches units 0
+  and 1 alone — with the controller gone from the screen, that limit had
+  nowhere else to show.
+- **CLI/config**: `-hard0`..`-hard3` and `hard0`..`hard3` are the whole story.
+  `hardcontroller=` is accepted and ignored so existing `.t8c` files still
+  load. `-omti<n>` / `-xebec<n>` still name the same slots, but an *empty*
+  value is now ignored rather than clearing the slot — old configs habitually
+  set one controller and blanked the others, and under one-slot semantics that
+  blanking would wipe the disk that was just attached.
+
+Regression: both controller paths behave exactly as before, byte for byte —
+scenario 2 boots off the OMTI with the same 190809 port operations and 216
+`READ` commands, and GDOS 2.4 still selects the Xebec and gets `0x0B` back.
+
 ## 2026-07-25 — A config setting could switch off attached hard disks (#6)
 
 **The bug.** `hardcontroller=` (and its GUI/CLI equivalents) did not just say
@@ -25,20 +66,14 @@ the boot EPROM. Nothing in the machine arbitrates between them, and neither
 EPROM selects one: the standard `g3s_8501004` only ever talks to floppies, and
 Sopp's `g3s_hd-omti` boots the OMTI and then falls back to floppy.
 
-A real Genie IIIs was fitted with exactly one hard-disk controller, and the
-operating system on the disk decides which one it talks to. Making the *user*
-declare it as well is redundant — the OS has already made the choice, and it
-never asks the emulator's opinion.
-
-The one thing the selector did buy was enforcing that "exactly one card is
-fitted", and without it two controllers can now answer at once, which no real
-machine could do. That turns out not to matter, because no Genie IIIs software
-looks across the ranges to notice: GDOS 2.4 polls Xebec status at `0x01` and
-has no OMTI support at all, Holte's driver drives `0x40`–`0x42`, and Sopp's
-EPROM reads `0x42` at reset for its card-presence signature. Every one of those
-is a check *within* one controller's range. So "exactly one card fitted" is
-carried perfectly well by "exactly one image attached" — which is the user's
-own act of configuration, and the thing the guest can actually detect.
+A real Genie IIIs does have exactly one controller fitted — but the OS on the
+disk already decides which one it addresses, so making the user declare it too
+was redundant. The only thing the setting bought was modelling "one card", and
+no Genie IIIs software can tell: GDOS 2.4 polls Xebec status at `0x01` and has
+no OMTI support at all, Holte's driver drives `0x40`–`0x42`, Sopp's EPROM reads
+`0x42` for its presence signature. Every one of those checks stays inside a
+single controller's range, so "one card fitted" is carried well enough by "a
+disk is attached".
 
 **Fix.** All eight guards are gone; each port range dispatches straight to its
 controller, in both the `IN` and `OUT` paths. Presence of an image, which the
@@ -52,9 +87,9 @@ back `0xFF` when it is clear. The write paths did not honour it, so
 on `!present` too, making an unfitted card inert in both directions rather than
 silently advancing a state machine nobody can read.
 
-`hdctl_set_active()` / `hdctl_get_active()` stay, and `hardcontroller=` still
-works — but they are now only what they always should have been: the default
-for which controller the GUI and CLI attach images to. `trs_hdctl.h` says so.
+`hdctl_set_active()` / `hdctl_get_active()` and `hardcontroller=` survived this
+step, demoted to naming the default slot for GUI and CLI attachment. They did
+not survive the follow-on above, which found they had nothing left to decide.
 
 Reproduction, measured before and after on the same configuration — Sopp EPROM,
 an OMTI image and a Xebec image attached, `hardcontroller=xebec` pinned:
@@ -68,23 +103,48 @@ Regression-checked: scenario 2 still boots straight off the OMTI to `C>` (Holte
 BIOS, CP/M V3.0 loader, both ST 225 partitions), and GDOS 2.4's driver still
 selects the Xebec on scenario 1 and gets DCB-ready status `0x0B` back.
 
-## 2026-07-25 — Kaempf CP/M retired as a test scenario
+## 2026-07-25 — Scenario 3 is now Kaempf CP/M 2.2 (Genie IIIs)
 
-Scenario 3 is gone, with its disks, images and launchers. Kämpf's CP/M 3.0 disk
-carries no Winchester init utility, so a drive can never be brought up from it —
-only `FORMAT`, on an image partitioned somewhere else.
+Scenario 3 was Kämpf's CP/M **3.0**, which turned out to be useless for
+Winchester work: it carries no hard-disk init utility at all, so a drive can
+never be brought up from it — only `FORMAT`, on an image partitioned somewhere
+else. It is replaced by Klaus Kämpf's **Genie IIIs CP/M 2.2**, CBIOS 2.6 vom
+3.3.85 (`dmk-working/g3s-kaempf-cpm22.dmk`), which has the whole toolchain:
 
-His CP/M 2.2X disks are not a substitute: `cpm22x-g3.dmk` and friends are
-**Genie III**, a different machine. Booted here they come up as `EG3200 Genie III
-64 KB`, and the TCS SASI ports `0x00`–`0x02` the Xebec lives on are decoded only
-under `GENIE3S` in `trs_io.c` — so that machine has no Xebec at all. (It also
-needs the 5100-01 system ROM rather than the 8501004 boot EPROM: the two load
-the boot sector to 0x4200 and 0xFC00 respectively, and the sector reads its CRTC
-table from an absolute 0x4285. With the wrong one the window comes up a few
-pixels high with no text.)
+```text
+CONFIG     drive parameters, including up to seven "Winchesterteile"
+<reboot>   F10 soft, Shift-F10 hard   -- required; the partitioning is re-read
+WNFORMAT   format the Winchester
+FINDBAD    mark bad blocks     PDRIVE   report the geometry in force
+```
 
-Xebec format work therefore stays on GDOS 2.4 (scenario 1), which is the path
-that was verified in #7 anyway.
+Its CBIOS already drives the controller during startup — the boot banner's
+`Initialisiere Winchester` line is `TEST DRIVE READY` (`0x00`), `RECALIBRATE`
+(`0x01`) and `INITIALIZE DRIVE CHARACTERISTICS` (`0x0C`), issued twice as it
+probes both LUNs, with the selection handshake reaching status `0x0B`. That is
+a good deal more of the S1410 command set than GDOS 2.4 ever exercises, so it
+is the better test of `trs_xebec.c`.
+
+**Bringing a drive up from it is unfinished**, so the scenario attaches no
+hard-disk image. Two attempts got WNFORMAT to run and report success while
+writing *nothing at all* to the image — 0 of 41,088 sectors — but both skipped
+`CONFIG`, which is what assigns drive letters to the Winchesterteile, so
+neither is evidence against the emulator. `run-xebec-debug.command [fresh]`
+picks the work up: it boots the same machine with `-io 0x30` logging every DCB,
+and creates the blank drive it needs.
+
+That blank's geometry is not guesswork on the cylinder count: this CBIOS
+declares **321 cylinders, 4 heads** to the controller at boot. Over the TCS
+adapter the S1410 uses 256-byte sectors, and 32 sectors per track is *assumed*
+— giving 321 × 4 × 32 = 41,088 sectors ≈ 10 MB, which addressing treats as a
+flat LBA space, so only the total matters. If that assumption is wrong, the
+number to change is the sectors-per-track in `run-xebec-debug.command`.
+
+Not to be confused with the `cpm22x` disks in the archive (`cpm22x-g3.dmk` and
+friends): those are **Genie III**, a different machine. They come up as `EG3200
+Genie III 64 KB`, want the 5100-01 system ROM rather than the 8501004 boot
+EPROM, and have no Xebec at all — the TCS SASI ports `0x00`–`0x02` are decoded
+only under `GENIE3S` in `trs_io.c`.
 
 ## 2026-07-25 — Kaempf CP/M 3.0 Winchester format fails (#7)
 

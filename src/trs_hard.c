@@ -49,9 +49,6 @@
 
 /* Structure describing controller state */
 typedef struct {
-  /* Controller present?  Yes if we have any drives, no if none */
-  int present;
-
   /* Controller register images */
   Uint8  control;
   Uint8  error;
@@ -68,9 +65,6 @@ typedef struct {
 
   /* Number of bytes already done in current read/write */
   int bytesdone;
-
-  /* Drive geometries and files */
-  HardImage d[TRS_HARD_MAXDRIVES];
 } State;
 
 static State state;
@@ -149,7 +143,7 @@ void trs_hard_debug(void)
   int i;
 
   printf("Hard disk controller state:");
-  if (state.present == 0) {
+  if (hard_image_present() == 0) {
     puts(" DISABLED");
     return;
   }
@@ -160,10 +154,10 @@ void trs_hard_debug(void)
       state.status, state.command, state.control, state.error);
 
   for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
-    if (state.d[i].file) {
-      printf("\nhard%d: '%s'\n", i, state.d[i].filename);
+    if (hard_slot[i].file) {
+      printf("\nhard%d: '%s'\n", i, hard_slot[i].filename);
       printf("\theads %d, cyls %4d, secs %4d, writeprot %d\n",
-          state.d[i].heads, state.d[i].cyls, state.d[i].secs, state.d[i].writeprot);
+          hard_slot[i].heads, hard_slot[i].cyls, hard_slot[i].secs, hard_slot[i].writeprot);
     }
   }
 }
@@ -186,24 +180,23 @@ void trs_hard_init(int poweron)
   if (poweron) {
     int i;
 
-    state.present = 0;
     state.seccnt = 0;
     state.status = 0;
 
     for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
-      state.d[i].writeprot = 0;
-      state.d[i].cyls = 0;
-      state.d[i].heads = 0;
-      state.d[i].secs = 0;
+      hard_slot[i].writeprot = 0;
+      hard_slot[i].cyls = 0;
+      hard_slot[i].heads = 0;
+      hard_slot[i].secs = 0;
 
-      if (hard_open(i) == 0) state.present = 1;
+      hard_open(i);
     }
   }
 }
 
 void trs_hard_attach(int drive, const char *diskname)
 {
-  snprintf(state.d[drive].filename, FILENAME_MAX, "%s", diskname);
+  snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
 
   if (hard_open(drive) == 0)
     trs_impexp_xtrshard_attach(drive);
@@ -214,38 +207,38 @@ void trs_hard_attach(int drive, const char *diskname)
 
 void trs_hard_remove(int drive)
 {
-  if (state.d[drive].file != NULL)
-    fclose(state.d[drive].file);
+  if (hard_slot[drive].file != NULL)
+    fclose(hard_slot[drive].file);
 
   trs_impexp_xtrshard_remove(drive);
 
-  state.d[drive].filename[0] = 0;
-  state.d[drive].file = NULL;
-  state.d[drive].writeprot = 0;
-  state.d[drive].cyls = 0;
-  state.d[drive].heads = 0;
-  state.d[drive].secs = 0;
+  hard_slot[drive].filename[0] = 0;
+  hard_slot[drive].file = NULL;
+  hard_slot[drive].writeprot = 0;
+  hard_slot[drive].cyls = 0;
+  hard_slot[drive].heads = 0;
+  hard_slot[drive].secs = 0;
 }
 
 const char*
 trs_hard_getfilename(int unit)
 {
-  return state.d[unit].filename;
+  return hard_slot[unit].filename;
 }
 
 int
 trs_hard_getwriteprotect(int unit)
 {
-  return state.d[unit].writeprot;
+  return hard_slot[unit].writeprot;
 }
 
 void
 trs_hard_getgeometry(int unit, int *cyls, int *head, int *secs)
 {
-  if (state.d[unit].file) {
-    *cyls = state.d[unit].cyls;
-    *head = state.d[unit].heads;
-    *secs = state.d[unit].secs;
+  if (hard_slot[unit].file) {
+    *cyls = hard_slot[unit].cyls;
+    *head = hard_slot[unit].heads;
+    *secs = hard_slot[unit].secs;
   }
 }
 
@@ -254,7 +247,7 @@ int trs_hard_in(int port)
 {
   int v = 0xff;
 
-  if (state.present) {
+  if (hard_image_present()) {
     switch (port) {
     case TRS_HARD_WP: {
       int i;
@@ -262,7 +255,7 @@ int trs_hard_in(int port)
       v = 0;
       for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
         if (hard_open(i) == 0) {
-          if (state.d[i].writeprot) {
+          if (hard_slot[i].writeprot) {
             v |= TRS_HARD_WPBIT(i) | TRS_HARD_WPSOME;
           }
         }
@@ -313,7 +306,7 @@ void trs_hard_out(int port, int value)
 #endif
   /* No image attached: no card in the machine, so ignore writes -- the
    * matching reads in trs_hard_in() already float high. */
-  if (state.present == 0)
+  if (hard_image_present() == 0)
     return;
 
   switch (port) {
@@ -366,7 +359,7 @@ void trs_hard_out(int port, int value)
     state.command = value;
     /* SDH's drive field is 2 bits (0-3), so guest software can select a
      * unit past TRS_HARD_MAXDRIVES even though only that many are
-     * emulated: treat it as not-present rather than indexing state.d[]
+     * emulated: treat it as not-present rather than indexing hard_slot[]
      * out of bounds. */
     if (state.drive >= TRS_HARD_MAXDRIVES) {
       hard_error(TRS_HARD_NFERR);
@@ -432,7 +425,7 @@ static void hard_read(int cmd)
     return;
   }
   if (hard_sector(TRS_HARD_READY | TRS_HARD_SEEKDONE | TRS_HARD_DRQ) == 0) {
-    FILE *f = state.d[state.drive].file;
+    FILE *f = hard_slot[state.drive].file;
 
     if (f && fread(state.secbuf, 1, state.secsize, f) != state.secsize) {
       if (ferror(f)) {
@@ -472,7 +465,7 @@ static void hard_verify(void)
 
 static void hard_format(void)
 {
-  FILE *f = state.d[state.drive].file;
+  FILE *f = hard_slot[state.drive].file;
 
 #if ZBX
   if (trs_io_debug_flags & HARDDEBUG2)
@@ -526,7 +519,7 @@ static void hard_seek(void)
  */
 static int hard_open(int drive)
 {
-  HardImage *d = &state.d[drive];
+  HardImage *d = &hard_slot[drive];
 
   if (hard_image_open(d, drive, "hard",
                       TRS_HARD_SEC_PER_TRK, TRS_HARD_MAXHEADS) != 0) {
@@ -552,7 +545,7 @@ static int hard_open(int drive)
  */
 static int hard_sector(int newstatus)
 {
-  const HardImage *d = &state.d[state.drive];
+  const HardImage *d = &hard_slot[state.drive];
 
   if (d->file == NULL && hard_open(state.drive) != 0) return -1;
 
@@ -601,7 +594,7 @@ static void hard_data_out(int value)
     if ((state.bytesdone == state.secsize) &&
         (state.command & TRS_HARD_CMDMASK) == TRS_HARD_WRITE &&
         (state.status & TRS_HARD_ERR) == 0) {
-      FILE *f = state.d[state.drive].file;
+      FILE *f = hard_slot[state.drive].file;
 
       /* Drop DRQ */
       state.status &= ~TRS_HARD_DRQ;
@@ -619,41 +612,8 @@ static void hard_data_out(int value)
   }
 }
 
-static void trs_save_harddrive(FILE *file, HardImage *d)
-{
-  int file_not_null = (d->file != NULL);
-
-  trs_save_int(file, &file_not_null, 1);
-  trs_save_filename(file, d->filename);
-  trs_save_int(file, &d->writeprot, 1);
-  trs_save_int(file, &d->cyls, 1);
-  trs_save_int(file, &d->heads, 1);
-  trs_save_int(file, &d->secs, 1);
-}
-
-static void trs_load_harddrive(FILE *file, HardImage *d)
-{
-  int file_not_null;
-
-  trs_load_int(file, &file_not_null, 1);
-
-  if (file_not_null)
-    d->file = (FILE *) 1;
-  else
-    d->file = NULL;
-
-  trs_load_filename(file, d->filename);
-  trs_load_int(file, &d->writeprot, 1);
-  trs_load_int(file, &d->cyls, 1);
-  trs_load_int(file, &d->heads, 1);
-  trs_load_int(file, &d->secs, 1);
-}
-
 void trs_hard_save(FILE *file)
 {
-  int i;
-
-  trs_save_int(file, &state.present, 1);
   trs_save_uint8(file, &state.control, 1);
   trs_save_uint8(file, &state.error, 1);
   trs_save_uint8(file, &state.seccnt, 1);
@@ -667,21 +627,10 @@ void trs_hard_save(FILE *file)
   trs_save_uint8(file, &state.command, 1);
   trs_save_uint8(file, state.secbuf, SECTORSIZE);
   trs_save_int(file, &state.bytesdone, 1);
-
-  for (i = 0; i < TRS_HARD_MAXDRIVES; i++)
-    trs_save_harddrive(file, &state.d[i]);
 }
 
 void trs_hard_load(FILE *file)
 {
-  int i;
-
-  for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
-    if (state.d[i].file != NULL)
-      fclose(state.d[i].file);
-  }
-
-  trs_load_int(file, &state.present, 1);
   trs_load_uint8(file, &state.control, 1);
   trs_load_uint8(file, &state.error, 1);
   trs_load_uint8(file, &state.seccnt, 1);
@@ -695,24 +644,4 @@ void trs_hard_load(FILE *file)
   trs_load_uint8(file, &state.command, 1);
   trs_load_uint8(file, state.secbuf, SECTORSIZE);
   trs_load_int(file, &state.bytesdone, 1);
-
-  for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
-    trs_load_harddrive(file, &state.d[i]);
-
-    if (state.d[i].file != NULL) {
-      state.d[i].file = fopen(state.d[i].filename, "rb+");
-      if (state.d[i].file == NULL) {
-        state.d[i].file = fopen(state.d[i].filename, "rb");
-        if (state.d[i].file == NULL) {
-          file_error("load hard%d: '%s'", i, state.d[i].filename);
-          state.d[i].filename[0] = 0;
-          state.d[i].writeprot = 0;
-          continue;
-        }
-        state.d[i].writeprot = 1;
-      } else {
-        state.d[i].writeprot = 0;
-      }
-    }
-  }
 }

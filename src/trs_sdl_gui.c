@@ -957,10 +957,7 @@ int gui_menu(const char *title, const MENU *entry, int selection)
               trs_disk_remove(selection);
               break;
             case HARD_DRIVE:
-            case OMTI_DRIVE:
-            case XEBEC_DRIVE:
-              hdctl_remove(entry[selection].type,
-                           hard_unit_index(entry, selection));
+              hdctl_remove(hard_unit_index(entry, selection));
               break;
             case WAFER:
               stringy_remove(selection);
@@ -984,16 +981,13 @@ int gui_menu(const char *title, const MENU *entry, int selection)
                   filename, DSK, 0, "Floppy Disk Image") >= 0)
                 trs_disk_insert(selection, filename);
               break;
-            case HARD_DRIVE:
-            case OMTI_DRIVE:
-            case XEBEC_DRIVE: {
-              int const htype = entry[selection].type;
+            case HARD_DRIVE: {
               int const unit = hard_unit_index(entry, selection);
-              const char *cur = hdctl_getfilename(htype, unit);
+              const char *cur = hdctl_getfilename(unit);
 
               if (gui_file(cur[0] ? cur : trs_hard_dir,
                   filename, HDV, 0, "Hard Disk Image") >= 0)
-                hdctl_attach(htype, unit, filename);
+                hdctl_attach(unit, filename);
               break;
             }
             case WAFER:
@@ -1456,48 +1450,43 @@ void gui_disk_menu(void)
 
 void gui_hard_menu(void)
 {
-  /* The three controllers a Genie IIIs can be fitted with, in popup order. */
-  static const char *ctrl_names[] = { "WD1000", "OMTI", "Xebec" };
-  static const int   ctrl_types[] = { HARD_DRIVE, OMTI_DRIVE, XEBEC_DRIVE };
-  int const genie3s = (trs_clones.model == GENIE3S);
   static int drive;   /* "Insert into Drive" target: 0 = None, 1..nslots */
+  int const nslots = hdctl_maxdrives();
   int cylinders = 202;
   int heads     = 0;
   int sectors   = 256;
   int selection = 0;
 
   while (1) {
-    /* Only one controller is fitted at a time; show its slots.  On non-
-       GENIE3S machines the controller is always the WD1000. */
-    int const active = genie3s ? hdctl_get_active() : HARD_DRIVE;
-    int const nslots = hdctl_maxdrives(active);
     MENU menu[16];
     char input[5];
     int  n = 0, i, value;
-    int  ctrl_row = -1, cyl_row, head_row, sec_row, insert_row, create_row;
+    int  cyl_row, head_row, sec_row, insert_row, create_row;
 
     /* Pre-fill the geometry fields from the highlighted drive, if any. */
     if (selection < nslots)
-      hdctl_getgeometry(active, selection, &cylinders, &heads, &sectors);
+      hdctl_getgeometry(selection, &cylinders, &heads, &sectors);
 
-    /* Drive-slot rows, all of the active controller's type. */
+    /* One list of slots.  A slot holds a disk, not a controller: whichever
+       controller the guest's OS drives is the one that serves it. */
     for (i = 0; i < nslots; i++) {
+      /* The list has no controllers in it, so mark the slots the two SASI
+         controllers cannot reach -- their LUN field is one bit wide. */
+      int const wd_only = hdctl_slot_wd1000_only(i);
+
       snprintf(menu[n].text, sizeof(menu[n].text), " %d: ", i);
-      gui_limit(hdctl_getfilename(active, i), &menu[n].text[4], 56);
-      menu[n].text[0] = hdctl_getwriteprotect(active, i) ? '*' : ' ';
-      menu[n].type = active;
+      gui_limit(hdctl_getfilename(i), &menu[n].text[4], wd_only ? 42 : 56);
+      if (wd_only) {
+        size_t const len = strlen(menu[n].text);
+
+        memset(&menu[n].text[len], ' ', 48 - len);
+        snprintf(&menu[n].text[48], 12, "%s", "WD1000 only");
+      }
+      menu[n].text[0] = hdctl_getwriteprotect(i) ? '*' : ' ';
+      menu[n].type = HARD_DRIVE;
       n++;
     }
     menu[n].text[0] = 0; menu[n].type = TITLE; n++;
-
-    if (genie3s) {
-      snprintf(menu[n].text, sizeof(menu[n].text), "%-60s", "Controller");
-      for (i = 0; i < 3; i++)
-        if (ctrl_types[i] == active)
-          snprintf(&menu[n].text[53], 7, "%6s", ctrl_names[i]);
-      menu[n].type = ENTRY;
-      ctrl_row = n++;
-    }
 
     snprintf(menu[n].text, sizeof(menu[n].text), "%s", "Save Disk Set");
     menu[n].type = SAVE_SET; n++;
@@ -1515,7 +1504,6 @@ void gui_hard_menu(void)
     snprintf(&menu[n].text[57], 4, "%3d", sectors);
     menu[n].type = ENTRY; sec_row = n++;
 
-    if (drive > nslots) drive = 0;   /* clamp if the controller changed */
     snprintf(menu[n].text, sizeof(menu[n].text), "%-60s",
              "Insert Created Hard Disk Image Into Drive");
     snprintf(&menu[n].text[54], 6, "%5s", drives[drive]); /* drives[]: None,0..7 */
@@ -1529,14 +1517,7 @@ void gui_hard_menu(void)
     gui_clear();
     selection = gui_menu(" Hard Disk Management ", menu, selection);
 
-    if (genie3s && selection == ctrl_row) {
-      int cur = 0;
-      for (i = 0; i < 3; i++)
-        if (ctrl_types[i] == active) cur = i;
-      cur = gui_popup("Controller", ctrl_names, 3, cur);
-      hdctl_set_active(ctrl_types[cur]);
-      if (selection > 0) selection = 0;   /* row layout may shrink */
-    } else if (selection == cyl_row) {
+    if (selection == cyl_row) {
         snprintf(input, 5, "%d", cylinders);
         if (gui_input(" Enter Cylinder Count ", input, input, 4, 0) > 0) {
           value = atoi(input);
@@ -1583,8 +1564,7 @@ void gui_hard_menu(void)
             if (trs_create_blank_hard(filename, cylinders, heads, sectors) != 0)
               gui_error(filename);
             else if (drive)
-              /* drive-1 is the slot; attach to the active controller. */
-              hdctl_attach(active, drive - 1, filename);
+              hdctl_attach(drive - 1, filename);   /* drive-1 is the slot */
             return;
           }
         }
