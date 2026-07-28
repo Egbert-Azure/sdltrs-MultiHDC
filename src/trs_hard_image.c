@@ -65,8 +65,21 @@ int hard_image_open(HardImage *d, int unit, const char *label,
     goto fail;
   }
 
-  if (rhh.flag1 & 0x80) d->writeprot = 1;
-
+  if (rhh.flag1 & 0x80) {
+    /* Honor the image's write-protect flag even if the file system allows
+     * read/write access. Open read-only so controller write paths fail
+     * consistently on protected images. */
+    if (!d->writeprot) {
+      fclose(d->file);
+      d->file = fopen(d->filename, "rb");
+      if (d->file == NULL) {
+        file_error("open %s%d readonly: '%s'", label, unit, d->filename);
+        goto fail;
+      }
+    }
+    d->writeprot = 1;
+  }
+ 
   /* Number of cylinders from the header (0/0 means 256, per reed.h) */
   d->cyls = (rhh.cylhi << 8) | (rhh.cyllo & 0xff);
 
@@ -141,18 +154,28 @@ void hard_image_load(FILE *file)
     trs_load_int(file, &d->secs, 1);
 
     if (file_not_null == 0)
-      continue;
-
-    /* Reopen the image the saved state had open, read-write if we can. */
-    d->file = fopen(d->filename, "rb+");
-    if (d->file != NULL) {
-      d->writeprot = 0;
-    } else if ((d->file = fopen(d->filename, "rb")) != NULL) {
-      d->writeprot = 1;
+     continue;
+ 
+    /* Reopen the image the saved state had open. Preserve a saved
+     * write-protect state if the image was previously protected. */
+    if (d->writeprot) {
+      d->file = fopen(d->filename, "rb");
+      if (d->file == NULL) {
+        file_error("load hard%d: '%s'", i, d->filename);
+        d->filename[0] = 0;
+        d->writeprot = 0;
+      }
     } else {
-      file_error("load hard%d: '%s'", i, d->filename);
-      d->filename[0] = 0;
-      d->writeprot = 0;
+      d->file = fopen(d->filename, "rb+");
+      if (d->file != NULL) {
+        d->writeprot = 0;
+      } else if ((d->file = fopen(d->filename, "rb")) != NULL) {
+        d->writeprot = 1;
+      } else {
+        file_error("load hard%d: '%s'", i, d->filename);
+        d->filename[0] = 0;
+        d->writeprot = 0;
+      }
     }
   }
 }
