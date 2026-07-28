@@ -1,12 +1,14 @@
-<!-- /OMTI_CONTROLLER.md — OMTI 5527 controller emulation -->
+<!-- /docs/architecture/omti.md — OMTI 5527 controller emulation -->
 
 # OMTI 5527 controller emulation
 
-This describes `src/trs_omti.c` / `trs_omti.h`, the OMTI 5527-class SASI/MFM hard-disk-controller emulation added by this fork. If you're debugging a boot, read, or write problem, start here for the protocol.
+This describes `src/trs_omti.c` / `trs_omti.h`, the OMTI 5527-class SASI/MFM hard-disk-controller emulation added by this fork. If you're debugging a boot, read, or write problem on Holte's CP/M 3.0, start here for the protocol.
+
+For what this backend shares with the other two, see [`controller-abstraction.md`](controller-abstraction.md). For where the protocol facts came from, see [`../archaeology/recovered-source.md`](../archaeology/recovered-source.md).
 
 ## What it emulates
 
-A TCS Genie IIIs can carry an OMTI 5527 SASI/MFM hard-disk controller card, typically driving a Seagate ST225 or similar, mapped at Z80 I/O ports 0x40–0x43. This is a separate, independent interface from the Western Digital WD1000/1010 controller emulated in `trs_hard.c` (ports 0xC8–0xCF, or relocated equivalents). The two share no state and no drive numbering, and a virtual Genie IIIs can have both attached at once (not tested yet). The protocol was reverse-engineered from Thomas Holte's real CP/M 3.0 BIOS driver (`hd2.mac`) and boot-loader source (`ldrbiohd.mac`), not from official OMTI documentation. All based on notes in modified src codes of the Holte CP/M 3.0
+A TCS Genie IIIs can carry an OMTI 5527 SASI/MFM hard-disk controller card, typically driving a Seagate ST225 or similar, mapped at Z80 I/O ports 0x40–0x43. This range is OMTI-exclusive: the Xebec is reached only at `0x00`–`0x02`, and the WD1000's registers sit at `0x50`–`0x57` on this machine. All three answer on their own ports whenever a disk is attached, and they read and write the same slots. The protocol was reverse-engineered from Thomas Holte's real CP/M 3.0 BIOS driver (`hd2.mac`) and boot-loader source (`ldrbiohd.mac`), not from official OMTI documentation. All based on notes in modified src codes of the Holte CP/M 3.0
 
 ## Port map
 
@@ -83,7 +85,7 @@ Sector size is always `OMTI_DEFAULT_SECSIZE` (512 bytes). OMTI 5527 with ST-506/
 
 ## Disk image format
 
-`.hdv` files use Matthew Reed's format (`src/reed.h`, `ReedHardHeader`): a 256-byte header (magic bytes `0x56 0xCB`, geometry, write-protect flag) followed by raw sector data. It's the same format `trs_hard.c` uses, read and written independently (no shared disk-image abstraction). Geometry-to-file-offset mapping is a flat linear byte shift:
+`.hdv` files use Matthew Reed's format (`src/reed.h`, `ReedHardHeader`): a 256-byte header (magic bytes `0x56 0xCB`, geometry, write-protect flag) followed by raw sector data. All three backends use it, through the shared `trs_hard_image.c` — the three near-identical private copies this file once had are gone. Geometry-to-file-offset mapping is a flat linear byte shift:
 
 ```
 file_offset = 256 + ((cyl * heads + head) * secs + sector) * secsize
@@ -95,11 +97,15 @@ There's no interleave or skew reordering, unlike floppy `.dmk` images, which do 
 
 Real OMTI format tooling (e.g. Volker Dose's `HDNDF.Z80`) stages a fill byte via `WRITE SECTOR BUFFER` (a normal 6-byte CDB plus one sector of data-out) before issuing `FORMAT TRACK`, which writes that staged pattern to the addressed sector. `state.fillbuf` holds the pattern. It defaults to `0xE5` (CP/M's empty-directory-entry marker) at power-on, so `FORMAT` behaves sanely even if a guest never loads a buffer first, and it's overwritten when `WRITE_SECTOR_BUFFER`'s data-out completes. `FORMAT` writes `state.fillbuf`, not a hardcoded pattern.
 
+## Write protection
+
+This backend's write paths never check the slot's write-protect flag themselves. Protection is enforced one layer down: `hard_image_open()` opens a protected image read-only, so `fwrite()` fails and the command returns an error status. The gap in the write paths was real (`77c95c8`) and is why the enforcement moved to the image layer for all three backends rather than being patched here. See [`../archaeology/design-decisions.md`](../archaeology/design-decisions.md).
+
 ## Key functions in `trs_omti.c`
 
 - `trs_omti_init(poweron)` — power-on/reset; on `poweron` also opens any attached drive images and resets `fillbuf` to `0xE5`.
-- `trs_omti_attach(drive, filename)` / `trs_omti_remove(drive)` — GUI/CLI attach points (`-omti0`/`-omti1`, Alt-H GUI screen).
-- `trs_omti_in(port)` / `trs_omti_out(port, value)` — the Z80 I/O trap entry points, dispatched from `src/trs_io.c`.
+- `trs_omti_attach(drive, filename)` / `trs_omti_remove(drive)` — this backend's own bookkeeping for a slot change. Called from `trs_hdctl.c`, not directly by the GUI or CLI: attaching is a slot operation and reaches every backend that can address the unit. See [`hdctl.md`](hdctl.md).
+- `trs_omti_in(port)` / `trs_omti_out(port, value)` — the Z80 I/O trap entry points, dispatched from `src/trs_io.c`'s `GENIE3S` block.
 - `omti_command()` — decodes a completed 6-byte CDB and dispatches to the command table above.
 - `omti_seek(lun, cyl, head, sector)` — the flat-sector-to-CHS math, bounds check, and `fseek()`.
 - `omti_data_in()` / `omti_data_out(value)` — per-byte handling during `DATA_IN`/`DATA_OUT` phases (also handles CDB byte-clocking while in `OMTI_PH_CDB`).

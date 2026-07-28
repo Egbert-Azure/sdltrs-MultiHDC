@@ -1,4 +1,4 @@
-<!-- /docs/G-DOS 2-4.md -->
+<!-- /docs/reference/G-DOS 2-4.md -->
 
 # G-DOS 2.4
 

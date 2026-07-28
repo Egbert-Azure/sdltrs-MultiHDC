@@ -4,7 +4,7 @@
 #
 # Boots this repo's own build/sdl2trs in one of the known-good Genie IIIs test
 # configurations. Boot EPROM, controller and .hdv are a matched set -- see
-# docs/boot-eprom-controller-pairing.md; if they disagree, the disk is simply
+# docs/archaeology/original-rom-behavior.md; if they disagree, the disk is simply
 # not found.
 #
 #   1  gdos    GDOS 2.4        standard EPROM  Xebec  g3s-gdos24-xebec-10mb.hdv

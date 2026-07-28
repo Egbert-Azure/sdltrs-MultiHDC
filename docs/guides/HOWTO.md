@@ -1,8 +1,8 @@
-<!-- /docs/HOWTO.md — running sdltrs-MultiHDC with a hard disk -->
+<!-- /docs/guides/HOWTO.md — running sdltrs-MultiHDC with a hard disk -->
 
 # Running sdltrs-MultiHDC with a hard disk
 
-Usage guide for both hard-disk scenarios: booting Holte's CP/M 3.0 on the OMTI controller, and running GDOS 2.4 on the Xebec. For the controller protocols, see `OMTI_CONTROLLER.md`; for how the boot ROM pairs with each controller, see `boot-eprom-controller-pairing.md`.
+Usage guide for both hard-disk scenarios: booting Holte's CP/M 3.0 on the OMTI controller, and running GDOS 2.4 on the Xebec. For the controller protocols, see [`../architecture/omti.md`](../architecture/omti.md) and [`../architecture/xebec.md`](../architecture/xebec.md); for how the boot ROM pairs with each controller, see [`../archaeology/original-rom-behavior.md`](../archaeology/original-rom-behavior.md).
 
 The machine has one set of four hard-disk slots, `hard0`–`hard3`. A slot holds a disk, not a controller. All three controllers answer on their own fixed ports, and the OS on the disk decides which one it drives, so there is nothing to select — you just attach the image and boot the matching ROM.
 
@@ -26,7 +26,7 @@ The empty (`""`) slots in the commands below matter. `~/.sdltrs.t8c` keeps whate
 
 ## 3. Scenario A — Holte CP/M 3.0 on the OMTI, from hard disk
 
-![Holte CP/M 3.0 booting from hard disk: RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3 loaded, 60K TPA, two Seagate ST 225 (21.4 MB) drives, C> prompt](../images/holte-cpm3-hd-boot.png)
+![Holte CP/M 3.0 booting from hard disk: RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3 loaded, 60K TPA, two Seagate ST 225 (21.4 MB) drives, C> prompt](../../images/holte-cpm3-hd-boot.png)
 
 Boot ROM: `g3s_hd-omti_bootrom_2764.bin` (Sopp's HD-boot EPROM). Disk: `HDV/g3s-omti-WORKING.hdv`.
 
@@ -83,7 +83,7 @@ A file copied A: to C: this way is written to the `.hdv` and reads back correctl
 
 ## 4. Scenario B — GDOS 2.4 on the Xebec
 
-![GDOS 2.4 with the Xebec hard disk: pd 0 showing drives 5 and 6, then dir 5 and dir 6 listing their directories](../images/gdos24-drives-5-6.png)
+![GDOS 2.4 with the Xebec hard disk: pd 0 showing drives 5 and 6, then dir 5 and dir 6 listing their directories](../../images/gdos24-drives-5-6.png)
 
 Boot ROM: `g3s_8501004_bootrom_2732.bin` (the standard Genie IIIs ROM). Disk: a Xebec image such as `HDV/g3s-gdos24-xebec-10mb.hdv`, attached to `-hard0`.
 
@@ -95,21 +95,42 @@ Boot ROM: `g3s_8501004_bootrom_2732.bin` (the standard Genie IIIs ROM). Disk: a 
   -nofullscreen
 ```
 
-The standard ROM boots the floppy, and GDOS 2.4's resident driver then reaches the Xebec hard disk on its own — the disk comes up as drives 5 and 6. `PD 5` / `PD 6` report the drives, `dir 5` / `dir 6` list them, and `HDFORMAT` formats them (both partitions at once — see `G-DOS 2-4.md`).
+The standard ROM boots the floppy, and GDOS 2.4's resident driver then reaches the Xebec hard disk on its own — the disk comes up as drives 5 and 6. `PD 5` / `PD 6` report the drives, `dir 5` / `dir 6` list them, and `HDFORMAT` formats them (both partitions at once — see [`../reference/G-DOS 2-4.md`](../reference/G-DOS%202-4.md)).
 
 ## 5. GUI hard-disk management
 
-Alt-H opens the Hard Disk Management screen: the four slots, `hard0`–`hard3`, with the active image next to each and an asterisk on the boot slot.
+Alt-H opens the Hard Disk Management screen: the four slots, `hard0`–`hard3`, with the attached image next to each, then the disk-set and image-creation rows.
 
 ```text
- Hard Disk Management
-*0: g3s-gdos24-xebec-10mb.hdv
- 1:
- 2:                                    WD1000 only
- 3:                                    WD1000 only
+                        Hard Disk Management
+ 0: g3s-gdos24-xebec-10mb.hdv
+*1: g3s-omti-WORKING.hdv
+ 2:                                             WD1000 only
+ 3:                                             WD1000 only
+
+Save Disk Set
+Load Disk Set
+
+Cylinder Count                                           306
+Head Count                                                 4
+Sector Count                                              17
+Insert Created Hard Disk Image Into Drive              None
+Create Hard Disk Image with Above Parameters
 ```
 
-Attach, detach, insert a freshly created image, or toggle write-protect (Space) on any slot without restarting.
+**The asterisk means write-protected, not boot.** Nothing on this screen marks a boot slot — there is no such thing, because no controller is selected and the guest's OS decides what it boots from. Slot 1 above is protected; slot 0 is not.
+
+Keys on a slot row:
+
+| Key | Does |
+|---|---|
+| Return / Insert / Tab | Attach an image — opens the file picker at the current image's directory, or `harddir` if the slot is empty |
+| Delete | Detach |
+| Space | Toggle write-protect |
+
+All three take effect immediately, without a restart. Write-protect is a property of the `.hdv` file rather than of the session: toggling it flips bit 7 of the Reed header's `flag1` byte (offset 7), chmods the file to match, and detaches and reattaches the slot. The setting therefore survives a restart, and it is honoured by whichever controller the guest drives — a protected image is opened read-only, so writes fail in all three backends.
+
+The three geometry fields pre-fill from whichever slot is highlighted, so moving the cursor onto an attached disk shows its real cylinder/head/sector counts. Editing them and choosing **Create Hard Disk Image with Above Parameters** writes a new blank `.hdv`; set **Insert Created Hard Disk Image Into Drive** to a slot number first if you want it attached on creation. Cylinder counts above 203 are incompatible with `XTRSHARD/DCT` and log a warning.
 
 ## 6. Drive-count limits per controller
 

@@ -1,4 +1,4 @@
-<!-- /boot-eprom-controller-pairing.md -->
+<!-- /docs/archaeology/original-rom-behavior.md -->
 
 # Boot EPROM and hard-disk controller pairing (Genie IIIs)
 

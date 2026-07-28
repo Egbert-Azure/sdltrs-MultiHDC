@@ -1,4 +1,4 @@
-<!-- /docs/changes-vs-upstream-sdltrs.md -->
+<!-- /docs/guides/changes-vs-upstream-sdltrs.md -->
 
 # Changes vs. upstream sdltrs
 

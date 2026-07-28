@@ -17,7 +17,7 @@ Getting there also meant unifying the three hard-disk backends onto shared image
 
 ## Status
 
-**OMTI with Holte's CP/M 3.0 from hard disk** (screenshot above): with Sopp's HD-boot EPROM, the OMTI 5527 path boots CP/M 3.0 straight off the hard disk. RESBIOS3 / BNKBIOS3 / RESBDOS3 / BNKBDOS3 load, 60K TPA, both drives recognized, `C>` prompt. See [`docs/HOWTO.md`](docs/HOWTO.md) and [`docs/OMTI_CONTROLLER.md`](docs/OMTI_CONTROLLER.md).
+**OMTI with Holte's CP/M 3.0 from hard disk** (screenshot above): with Sopp's HD-boot EPROM, the OMTI 5527 path boots CP/M 3.0 straight off the hard disk. RESBIOS3 / BNKBIOS3 / RESBDOS3 / BNKBDOS3 load, 60K TPA, both drives recognized, `C>` prompt. See [`docs/guides/HOWTO.md`](docs/guides/HOWTO.md) and [`docs/architecture/omti.md`](docs/architecture/omti.md).
 
 **Xebec S1410 under GDOS 2.4:**
 
@@ -40,7 +40,7 @@ Under real GDOS 2.4: `PD 5` and `PD 6` return drive data, `HDFORMAT` completes b
 
 ## Boot ROMs
 
-On a real Genie IIIs the boot EPROM and the hard-disk controller are a matched pair — see [`docs/boot-eprom-controller-pairing.md`](docs/boot-eprom-controller-pairing.md).
+On a real Genie IIIs the boot EPROM and the hard-disk controller are a matched pair — see [`docs/archaeology/original-rom-behavior.md`](docs/archaeology/original-rom-behavior.md).
 
 - [`ROM/g3s_8501004_bootrom_2732.bin`](ROM/g3s_8501004_bootrom_2732.bin) — the standard 4 KB (2732) Genie IIIs boot ROM, and the genuine Xebec-speaking one.
 - [`ROM/g3s_hd-omti_bootrom_2764.bin`](ROM/g3s_hd-omti_bootrom_2764.bin) — Arnulf Sopp's 1986 8 KB (2764) retrofit that boots from hard disk on the OMTI controller. The original OMTI port addresses (`0x40`–`0x43`) came from disassembling this ROM.
@@ -59,21 +59,16 @@ or
 
 ## Documentation
 
-Longer references and the investigation history are in [`docs/`](docs):
+Longer references and the investigation history are in [`docs/`](docs/README.md), grouped by what they answer:
 
-| Document | What it covers |
-| --- | --- |
-| [xebec-s1410-story.md](docs/xebec-s1410-story.md) | Narrative overview: why this fork exists, a SASI primer, how the emulation is built, the drives-5/6 mystery and its fix |
-| [HOWTO.md](docs/HOWTO.md) | Running the emulator with a working hard disk: build, image selection, launching, booting, GUI hard-disk management |
-| [OMTI_CONTROLLER.md](docs/OMTI_CONTROLLER.md) | The OMTI 5527 controller emulation (`trs_omti.c`/`.h`) and its protocol |
-| [boot-eprom-controller-pairing.md](docs/boot-eprom-controller-pairing.md) | How the two boot EPROMs pair with the hard-disk controllers |
-| [changes-vs-upstream-sdltrs.md](docs/changes-vs-upstream-sdltrs.md) | File-by-file record of how the fork diverges from stock SDL2TRS (files added, modified, untouched) and why |
-| [G-DOS 2-4.md](docs/G-DOS%202-4.md) | Overview of G-DOS 2.4 and its cross-Genie model detection |
-| [gdos-screen-formats.md](docs/gdos-screen-formats.md) | G-DOS 2.4 screen formats |
-| [Installation des Holte CPM-Plus.md](docs/Installation%20des%20Holte%20CPM-Plus.md) | Installing Holte's CP/M Plus on the Genie IIIs (German) |
-| [Xebec SASI:MFM S1510A Signal DEf.md](docs/Xebec%20SASI%3AMFM%20S1510A%20Signal%20DEf.md) | Xebec SASI/MFM bus signal definitions |
-| [Xebec S1410A Owner Manual_text.pdf](docs/Xebec%20S1410A%20Owner%20Manual_text.pdf) | Primary protocol reference: the Xebec S1410A owner's manual |
-| [gdos_auszug-aus-manual.pdf](docs/gdos_auszug-aus-manual.pdf) · [geniecpm.pdf](docs/geniecpm.pdf) | Scanned manual excerpts (G-DOS, Genie CP/M) |
+| Directory | Answers | Highlights |
+| --- | --- | --- |
+| [`docs/guides/`](docs/guides/) | How do I use it? | [HOWTO.md](docs/guides/HOWTO.md) — build, attach a disk, both verified boot scenarios, the Alt-H GUI, debug flags. [changes-vs-upstream-sdltrs.md](docs/guides/changes-vs-upstream-sdltrs.md) — file-by-file divergence from stock SDL2TRS |
+| [`docs/architecture/`](docs/architecture/) | How does it work today? | [controller-abstraction.md](docs/architecture/controller-abstraction.md) — three backends, one slot table, one image layer. Then one document per controller: [omti.md](docs/architecture/omti.md), [xebec.md](docs/architecture/xebec.md), [wd1000.md](docs/architecture/wd1000.md), plus [hdctl.md](docs/architecture/hdctl.md) for the slot facade |
+| [`docs/archaeology/`](docs/archaeology/) | How did we find out, and why is it like this? | [design-decisions.md](docs/archaeology/design-decisions.md) — what was chosen, rejected, and why, including the decisions made twice. [controller-history.md](docs/archaeology/controller-history.md) — the drives-5/6 mystery. [recovered-source.md](docs/archaeology/recovered-source.md) — provenance of every protocol fact. [original-rom-behavior.md](docs/archaeology/original-rom-behavior.md) — what each boot EPROM can reach |
+| [`docs/reference/`](docs/reference/) | What did the original documents say? | The Xebec S1410A owner's manual and SASI signal definitions, the G-DOS 2.4 material, and the 1993 German account of installing Holte's CP/M Plus on real hardware |
+
+[`docs/README.md`](docs/README.md) is the full index.
 
 See [`changelog.md`](changelog.md) for the dated development history.
 
