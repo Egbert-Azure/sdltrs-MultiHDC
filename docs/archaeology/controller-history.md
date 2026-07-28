@@ -1,6 +1,10 @@
-<!-- /xebec-s1410-story.md -->
+<!-- /docs/archaeology/controller-history.md -->
 
-# sdltrsXebec — emulating the Xebec S1410 for the TCS Genie IIIs
+# How the three-controller emulation came about
+
+The investigation history behind `sdltrs-MultiHDC`: why a third controller was needed, how its host adapter was eventually found, and what the false trails were. This is the narrative record — for the protocol as it stands now, read [`../architecture/xebec.md`](../architecture/xebec.md) and [`../architecture/omti.md`](../architecture/omti.md); for the decisions taken along the way, [`design-decisions.md`](design-decisions.md).
+
+Written while the fork was still called `sdltrsXebec`.
 
 ## Why this fork exists
 
@@ -29,12 +33,14 @@ A command runs through phases in a fixed order: idle, then the command block goe
 
 I used the OMTI code as a structural template — the *shape*, not the protocol. Both are phase-based state machines driven by port I/O, and both read and write Matthew Reed's 256-byte-header `.hdv` format. Beyond that they differ.
 
-The Xebec code (`src/trs_xebec.c` / `.h`) has one controller core behind **two host-adapter interfaces**:
+The Xebec code (`src/trs_xebec.c` / `.h`) had, at this point, one controller core behind **two host-adapter interfaces** — a design that was later removed (see the note at the end of this section):
 
 - **Holte's CP/M adapter** at ports `0x40`–`0x42` — the same range the OMTI uses. On real hardware you only ever have one controller chip installed, so OMTI and Xebec are mutually exclusive on that slot. The port dispatch in `src/trs_io.c` routes `0x40`–`0x42` dynamically to whichever of the two has an image attached, rather than letting both claim the range. (`0x43`, the OMTI's DMA/mask register, has no Xebec equivalent and stays OMTI-only.)
 - **The TCS onboard SASI adapter** at ports `0x00`–`0x02` — which, as it turned out, is the one that mattered.
 
 The command opcodes, status bit-flags, and DCB block addressing came straight from the Xebec S1410A owner's manual and were cross-checked against Thomas Holte's CP/M 3.0 BIOS driver (`hd2.mac`). The status register is a real SASI bit-flag byte, not the single-magic-value-per-phase shortcut the OMTI code took; addressing is a flat logical block number translated to a file offset through the image's Reed-header geometry.
+
+> **Superseded.** The Holte-slot interface was removed in `b2a8c5a`. Nothing drives a Xebec at `0x40`, and the dynamic routing it needed was the only place in the I/O dispatch that had to arbitrate between two backends for one port range. The Xebec now lives only at `0x00`–`0x02`, and `0x40`–`0x43` is OMTI-exclusive. See [`design-decisions.md`](design-decisions.md).
 
 ## The mystery: drives 5 and 6 that never appeared
 
