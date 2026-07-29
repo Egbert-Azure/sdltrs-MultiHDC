@@ -432,14 +432,6 @@ static void xebec_command(void)
     state.sense_lba = 0;
   }
 
-  /* LUN is a 1-bit field in the DCB, so guest software can address a
-   * second unit even though only TRS_XEBEC_MAXDRIVES is emulated: treat
-   * it as not-present rather than indexing hard_slot[] out of bounds. */
-  if (state.lun >= TRS_XEBEC_MAXDRIVES) {
-    xebec_fail(TRS_XEBEC_ERR_NOT_READY, 0, 0);
-    return;
-  }
-
   /* DCB byte 4 is the block count for READ/WRITE (0 means 256) */
   state.blocks = state.dcb[4] ? state.dcb[4] : 256;
 
