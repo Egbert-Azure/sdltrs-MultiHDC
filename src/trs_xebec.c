@@ -198,28 +198,6 @@ void trs_xebec_remove(int drive)
   hard_slot_remove(drive);
 }
 
-const char*
-trs_xebec_getfilename(int unit)
-{
-  return hard_slot[unit].filename;
-}
-
-int
-trs_xebec_getwriteprotect(int unit)
-{
-  return hard_slot[unit].writeprot;
-}
-
-void
-trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs)
-{
-  if (hard_slot[unit].file) {
-    *cyls = hard_slot[unit].cyls;
-    *head = hard_slot[unit].heads;
-    *secs = hard_slot[unit].secs;
-  }
-}
-
 /*
  * TCS Genie IIIs onboard host adapter at ports 0x00-0x02 (see
  * trs_xebec.h): same controller, rawer bus interface. GDOS 2.4's driver

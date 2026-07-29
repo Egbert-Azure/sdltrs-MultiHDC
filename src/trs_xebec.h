@@ -53,9 +53,6 @@ extern void  trs_xebec_attach(int drive, const char *diskname);
 extern void  trs_xebec_remove(int drive);
 extern int   trs_xebec_tcs_in(int port);
 extern void  trs_xebec_tcs_out(int port, int value);
-extern const char *trs_xebec_getfilename(int unit);
-extern int   trs_xebec_getwriteprotect(int unit);
-extern void  trs_xebec_getgeometry(int unit, int *cyls, int *head, int *secs);
 
 #define TRS_XEBEC_MAXDRIVES 2 /* SASI 1-bit LUN (hd2.mac MAXDRIVE) addresses 2 units */
 

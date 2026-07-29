@@ -43,9 +43,6 @@ extern void  trs_omti_attach(int drive, const char *diskname);
 extern void  trs_omti_remove(int drive);
 extern int   trs_omti_in(int port);
 extern void  trs_omti_out(int port, int value);
-extern const char *trs_omti_getfilename(int unit);
-extern int   trs_omti_getwriteprotect(int unit);
-extern void  trs_omti_getgeometry(int unit, int *cyls, int *head, int *secs);
 
 #define TRS_OMTI_MAXDRIVES 2 /* SASI 1-bit LUN (hd2.mac MAXDRIVE) addresses 2 units */
 

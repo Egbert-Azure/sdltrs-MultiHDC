@@ -174,28 +174,6 @@ void trs_omti_remove(int drive)
   hard_slot_remove(drive);
 }
 
-const char*
-trs_omti_getfilename(int unit)
-{
-  return hard_slot[unit].filename;
-}
-
-int
-trs_omti_getwriteprotect(int unit)
-{
-  return hard_slot[unit].writeprot;
-}
-
-void
-trs_omti_getgeometry(int unit, int *cyls, int *head, int *secs)
-{
-  if (hard_slot[unit].file) {
-    *cyls = hard_slot[unit].cyls;
-    *head = hard_slot[unit].heads;
-    *secs = hard_slot[unit].secs;
-  }
-}
-
 /* Read from an I/O port mapped to the controller */
 int trs_omti_in(int port)
 {
