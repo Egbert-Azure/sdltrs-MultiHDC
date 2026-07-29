@@ -75,6 +75,14 @@ extern int hard_image_open(HardImage *d, int unit, const char *label,
                            int sec_per_trk, int maxheads);
 
 /*
+ * Close (if open) and clear the slot: filename, file handle, write-protect
+ * and geometry all reset to empty.  The caller is responsible for any
+ * controller-specific side effect of removal (e.g. WD1000's xtrshard
+ * import/export hook).
+ */
+extern void hard_slot_remove(int drive);
+
+/*
  * Byte offset of a sector within the image, past the Reed header.  cyl,
  * head and sec must already be reduced to the drive's geometry (sec in
  * 0..secs-1).  secsize is the controller's current bytes-per-sector.
