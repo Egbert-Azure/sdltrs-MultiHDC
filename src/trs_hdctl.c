@@ -30,6 +30,16 @@ int hdctl_slot_wd1000_only(int unit)
   return unit >= TRS_OMTI_MAXDRIVES && unit >= TRS_XEBEC_MAXDRIVES;
 }
 
+/*
+ * These are not "pick the controller for this unit" — that's the point.
+ * Every backend whose MAXDRIVES covers unit gets the call, so all of them
+ * end up attached to the same image at once. There is no notion of a
+ * "selected" controller to attach to instead: nothing in this emulator
+ * gates I/O on a user-chosen controller (that was bug #6), so any backend
+ * wired in at all can be polled by the guest at any moment and must have
+ * its own bookkeeping (file handle, geometry) already in step with the
+ * slot before that happens.
+ */
 void hdctl_attach(int unit, const char *filename)
 {
   if (unit < TRS_HARD_MAXDRIVES)  trs_hard_attach(unit, filename);
