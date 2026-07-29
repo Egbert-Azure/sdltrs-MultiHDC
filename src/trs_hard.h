@@ -40,8 +40,6 @@ extern void  trs_hard_remove(int drive);
 extern int   trs_hard_in(int port);
 extern void  trs_hard_out(int port, int value);
 extern const char *trs_hard_getfilename(int unit);
-extern int   trs_hard_getwriteprotect(int unit);
-extern void  trs_hard_getgeometry(int unit, int *cyls, int *head, int *secs);
 
 /* RSHARD assumes 32 sectors/track */
 #define TRS_HARD_SEC_PER_TRK 32

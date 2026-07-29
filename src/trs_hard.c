@@ -217,22 +217,6 @@ trs_hard_getfilename(int unit)
   return hard_slot[unit].filename;
 }
 
-int
-trs_hard_getwriteprotect(int unit)
-{
-  return hard_slot[unit].writeprot;
-}
-
-void
-trs_hard_getgeometry(int unit, int *cyls, int *head, int *secs)
-{
-  if (hard_slot[unit].file) {
-    *cyls = hard_slot[unit].cyls;
-    *head = hard_slot[unit].heads;
-    *secs = hard_slot[unit].secs;
-  }
-}
-
 /* Read from an I/O port mapped to the controller */
 int trs_hard_in(int port)
 {
