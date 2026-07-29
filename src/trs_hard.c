@@ -207,17 +207,8 @@ void trs_hard_attach(int drive, const char *diskname)
 
 void trs_hard_remove(int drive)
 {
-  if (hard_slot[drive].file != NULL)
-    fclose(hard_slot[drive].file);
-
   trs_impexp_xtrshard_remove(drive);
-
-  hard_slot[drive].filename[0] = 0;
-  hard_slot[drive].file = NULL;
-  hard_slot[drive].writeprot = 0;
-  hard_slot[drive].cyls = 0;
-  hard_slot[drive].heads = 0;
-  hard_slot[drive].secs = 0;
+  hard_slot_remove(drive);
 }
 
 const char*

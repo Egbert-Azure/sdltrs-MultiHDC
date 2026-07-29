@@ -109,6 +109,21 @@ fail:
   return -1;
 }
 
+void hard_slot_remove(int drive)
+{
+  HardImage *d = &hard_slot[drive];
+
+  if (d->file != NULL)
+    fclose(d->file);
+
+  d->filename[0] = 0;
+  d->file = NULL;
+  d->writeprot = 0;
+  d->cyls = 0;
+  d->heads = 0;
+  d->secs = 0;
+}
+
 long hard_image_offset(const HardImage *d, int secsize,
                        int cyl, int head, int sec)
 {
