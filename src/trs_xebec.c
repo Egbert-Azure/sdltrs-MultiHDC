@@ -42,11 +42,12 @@
  *
  * Disk images use the same 256-byte Reed header (reed.h) as trs_hard.c
  * and trs_omti.c. As with OMTI, the manual gives no live sector-size
- * register, so a fixed size is used unconditionally: 256 bytes/sector,
- * per TRS_XEBEC_TCS_SECSIZE (trs_xebec.h) -- the value GDOS 2.4's driver
- * was observed to run the S1410 at, not the ST-506/MFM-typical 512.
- * This is a static property of the adapter (a real S1410A jumper), so it
- * is set once at reset, not re-established on every SEL strobe.
+ * register: real hardware fixes this with the S1410A's 256/512 jumper,
+ * so this emulator models it the same way, with trs_xebec_secsize
+ * (default TRS_XEBEC_TCS_SECSIZE, trs_xebec.h -- the value GDOS 2.4's
+ * driver was observed to run the S1410 at, not the ST-506/MFM-typical
+ * 512) settable via -xebecsecsize. It is read once at reset, not
+ * re-established on every SEL strobe.
  */
 
 #include <errno.h>
@@ -119,6 +120,8 @@ typedef struct {
 
 static State state;
 
+int trs_xebec_secsize = TRS_XEBEC_TCS_SECSIZE;
+
 static int  xebec_open(int drive);
 static int  xebec_seek(int lun, long lba);
 static long xebec_capacity(int lun);
@@ -173,7 +176,7 @@ void trs_xebec_init(int poweron)
   if (poweron) {
     int i;
 
-    state.secsize = TRS_XEBEC_TCS_SECSIZE;
+    state.secsize = trs_xebec_secsize;
     memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {

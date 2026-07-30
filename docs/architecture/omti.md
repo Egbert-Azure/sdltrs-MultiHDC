@@ -81,7 +81,7 @@ Anything else logs `"trs_omti: unknown command 0x%02X"` and returns an error sta
 `cyls`/`heads`/`secs` are read once from the attached `.hdv` file's Reed header at open time (`omti_open()`) and never changed afterward, even though `SET DRIVE CHARACTERISTICS` looks like it should reprogram them. An earlier version let that command overwrite the live geometry, on the theory that real OMTI hardware is "programmed" for its drive that way. 
 That was wrong and was reverted, because the real boot EPROM sends a stale, wrong characteristics block automatically at every startup, and letting it override geometry corrupted every subsequent seek. A real OMTI 5527 drive wired with N heads responds to CDB head values 0..N-1 regardless of what a boot ROM claims; this field is more likely for write-precompensation or step-rate configuration than addressable-head count. 
 
-Sector size is always `OMTI_DEFAULT_SECSIZE` (512 bytes). OMTI 5527 with ST-506/MFM drives (Seagate ST225 and similar) are natively 512 bytes per sector, unlike WD1000's live sector-size register.
+There is no live sector-size register as on the WD1000: real OMTI 5527 hardware fixes sector size with a 256/512/1024 jumper, so this emulator does the same, with `trs_omti_secsize` (default `OMTI_DEFAULT_SECSIZE` = 512, the size the ST-506/MFM drives it was paired with, e.g. the Seagate ST225, used) read once at reset and settable via `-omtisecsize`.
 
 ## Disk image format
 

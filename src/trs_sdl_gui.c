@@ -1448,6 +1448,48 @@ void gui_disk_menu(void)
   }
 }
 
+/* Controller-level, not per-slot: the emulated 256/512(/1024) sector size
+   jumper on each SASI controller card. A submenu of its own because the
+   16-row Genie IIIs screen leaves gui_hard_menu() only one spare row --
+   not enough room for both controllers inline. Takes effect on the next
+   reset, same as moving a physical jumper would. */
+static void gui_hard_secsize_menu(void)
+{
+  static const char *xebec_secsizes[] = {"256", "512"};
+  static const char *omti_secsizes[]  = {"256", "512", "1024"};
+  int selection = 0;
+
+  while (1) {
+    MENU menu[3];
+    int i;
+
+    snprintf(menu[0].text, sizeof(menu[0].text), "%-60s",
+             "Xebec Controller Sector Size");
+    snprintf(&menu[0].text[56], 5, "%4d", trs_xebec_secsize);
+    menu[0].type = ENTRY;
+    snprintf(menu[1].text, sizeof(menu[1].text), "%-60s",
+             "OMTI Controller Sector Size");
+    snprintf(&menu[1].text[56], 5, "%4d", trs_omti_secsize);
+    menu[1].type = ENTRY;
+    menu[2].text[0] = 0; menu[2].type = 0; /* terminator */
+
+    gui_clear();
+    selection = gui_menu(" Controller Sector Size ", menu, selection);
+
+    if (selection == 0) {
+      i = trs_xebec_secsize == 512 ? 1 : 0;
+      i = gui_popup("Xebec Sector Size", xebec_secsizes, 2, i);
+      trs_xebec_secsize = atoi(xebec_secsizes[i]);
+    } else if (selection == 1) {
+      i = trs_omti_secsize == 1024 ? 2 : trs_omti_secsize == 512 ? 1 : 0;
+      i = gui_popup("OMTI Sector Size", omti_secsizes, 3, i);
+      trs_omti_secsize = atoi(omti_secsizes[i]);
+    } else if (selection == -1) {
+      return;
+    }
+  }
+}
+
 void gui_hard_menu(void)
 {
   static int drive;   /* "Insert into Drive" target: 0 = None, 1..nslots */
@@ -1461,7 +1503,7 @@ void gui_hard_menu(void)
     MENU menu[16];
     char input[5];
     int  n = 0, i, value;
-    int  cyl_row, head_row, sec_row, insert_row, create_row;
+    int  cyl_row, head_row, sec_row, insert_row, create_row, secsize_row;
 
     /* Pre-fill the geometry fields from the highlighted drive, if any. */
     if (selection < nslots)
@@ -1511,6 +1553,9 @@ void gui_hard_menu(void)
     snprintf(menu[n].text, sizeof(menu[n].text), "%s",
              "Create Hard Disk Image with Above Parameters");
     menu[n].type = ENTRY; create_row = n++;
+    snprintf(menu[n].text, sizeof(menu[n].text), "%s",
+             "Controller Sector Size (Xebec/OMTI)");
+    menu[n].type = ENTRY; secsize_row = n++;
 
     menu[n].text[0] = 0; menu[n].type = 0; /* terminator */
 
@@ -1555,6 +1600,8 @@ void gui_hard_menu(void)
         }
     } else if (selection == insert_row) {
         drive = gui_popup("Drive", drives, nslots + 1, drive);
+    } else if (selection == secsize_row) {
+        gui_hard_secsize_menu();
     } else if (selection == create_row) {
         filename[0] = 0;
         if (gui_input(" Enter Filename for Hard Disk Image ",

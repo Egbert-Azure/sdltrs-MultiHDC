@@ -58,7 +58,7 @@ out 02     → pulse SEL
 in  01=0B  → controller has asserted BUSY, C/D and REQ
 ```
 
-The emulator responds to SEL only when the latched bus byte has bit 0 set — controller ID 0, the only ID G-DOS's driver ever selects. On success it sets the sector size to 256 and enters the DCB phase.
+The emulator responds to SEL only when the latched bus byte has bit 0 set — controller ID 0, the only ID G-DOS's driver ever selects. On success it enters the DCB phase. (Sector size used to be [re-]set here too; that was a bug — see "Geometry and sector size" below.)
 
 ## Phases
 
@@ -147,7 +147,7 @@ Sense describes the command that just completed, so every command except `REQUES
 
 Geometry is read from the `.hdv` Reed header at open time and never changed. `INITIALIZE DRIVE CHARACTERISTICS` is acknowledged but ignored for addressing — the same decision, for the same reason, as the OMTI's `SET CHARACTERISTICS`; see `omti.md`. It is worth tracing though: a guest declaring a bigger drive than the image is exactly what walks a formatter off the end of the file, and `XEBECDEBUG2` prints the declared geometry alongside the image's.
 
-Sector size is 256 bytes on the TCS adapter (`TRS_XEBEC_TCS_SECSIZE`). G-DOS runs the S1410 that way. There is no live sector-size register as on the WD1000.
+There is no live sector-size register as on the WD1000: real S1410A hardware fixes sector size with a 256/512 jumper, so this emulator does the same, with `trs_xebec_secsize` (default `TRS_XEBEC_TCS_SECSIZE` = 256, the size G-DOS runs the S1410 at) read once at reset and settable via `-xebecsecsize`. It used to be re-set on every SEL strobe, which made the jumper unemulatable — see "Selection" above.
 
 The format commands fill with `0xE5` (`TRS_XEBEC_FORMAT_FILL`) rather than the manual's documented `0x6C`: `0xE5` is what the verified-working G-DOS `HDFORMAT` path has always seen, and it is also what CP/M expects in an erased directory. Control-byte bit 5 overrides it with the host's staged sector buffer.
 

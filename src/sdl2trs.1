@@ -322,6 +322,11 @@ Disable Turbo mode temporarily while pasting from clipboard (Default).
 .B \-noxmem(80)
 Disable X-MEM/80 16K page memory expansion for Model I (Default).
 .TP
+\fB\-omtisecsize\fP \fIbytes\fP
+Set the OMTI 5527 hard disk controller's sector size in bytes, emulating
+its 256/512/1024 jumper.
+Default: \fI512\fP.
+.TP
 .B \-pause
 Pause the emulator at startup.
 .TP
@@ -447,6 +452,11 @@ Default: \fI5\fP.
 \fB\-w(afer)\fP\fIN filename\fP
 Specifies name of stringy wafer image file to be inserted into
 Wafer\fIN\fP (0 - 7).
+.TP
+\fB\-xebecsecsize\fP \fIbytes\fP
+Set the Xebec S1410/S1410A hard disk controller's sector size in bytes,
+emulating its 256/512 jumper.
+Default: \fI256\fP.
 .TP
 .B \-xmem(80)
 Enable X-MEM/80 16K page memory expansion (Michael Wessel) for Model I.

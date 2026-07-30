@@ -41,8 +41,10 @@
  *
  * Disk images use the same 256-byte Reed header (reed.h) as trs_hard.c's
  * WD1000/1010 images.  Unlike WD1010, this protocol has no live
- * sector-size register; the OMTI 5527's drives (e.g. the Seagate ST225)
- * are fixed at 512 bytes/sector, so that size is used unconditionally.
+ * sector-size register: real hardware fixes it with the OMTI 5527's
+ * 256/512/1024 jumper, so this emulator models it the same way, with
+ * trs_omti_secsize (default 512, the size the ST-506/MFM drives it was
+ * paired with, e.g. the Seagate ST225, used) settable via -omtisecsize.
  */
 
 #include <errno.h>
@@ -94,6 +96,8 @@ typedef struct {
 } State;
 
 static State state;
+
+int trs_omti_secsize = OMTI_DEFAULT_SECSIZE;
 
 static int  omti_open(int drive);
 static int  omti_seek(int lun, int cyl, int head, int sector);
@@ -475,11 +479,11 @@ static int omti_open(int drive)
                       OMTI_SEC_PER_TRK, OMTI_MAXHEADS) != 0)
     return -1;
 
-  /* No sector-size field exists in this protocol. The OMTI 5527 and the
-   * ST-506/MFM drives it was paired with (e.g. the Seagate ST225) are
-   * fixed at 512 bytes/sector, so use that rather than trying to infer
-   * a size from the image file. */
-  state.secsize = OMTI_DEFAULT_SECSIZE;
+  /* No sector-size field exists in this protocol: real hardware fixes
+   * it with a 256/512/1024 jumper, so this emulator models it the same
+   * way, with trs_omti_secsize rather than trying to infer a size from
+   * the image file. */
+  state.secsize = trs_omti_secsize;
 
   state.status = TRS_OMTI_IDLE;
   return 0;

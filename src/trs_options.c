@@ -322,6 +322,7 @@ static const struct {
   { "o1",              opt_file,          1, 1, "o"                   },
   { "omti0",           opt_file,          1, 0, "o"                   },
   { "omti1",           opt_file,          1, 1, "o"                   },
+  { "omtisecsize",     opt_intval,        1, 11, NULL                 },
   { "pause",           opt_value,         0, 1, &trs_paused           },
   { "p",               opt_printer,       1, 0, NULL                  },
   { "pd",              opt_dirname,       1, 0, trs_printer_dir       },
@@ -402,6 +403,7 @@ static const struct {
   { "x1",              opt_file,          1, 1, "x"                   },
   { "xebec0",          opt_file,          1, 0, "x"                   },
   { "xebec1",          opt_file,          1, 1, "x"                   },
+  { "xebecsecsize",    opt_intval,        1, 10, NULL                 },
   { "xmem",            opt_memory,        0, 7, &xmem80               },
   { "xmem80",          opt_memory,        0, 7, &xmem80               },
   { "y",               opt_intval,        1, 7, NULL                  },
@@ -726,6 +728,18 @@ static void opt_intval(const char *arg, int intarg, int *variable)
     case 9: /* memsize */
       if (value >= 4 && value <= 48)
         trs_mem_size = (value << 10) + RAM_START;
+      break;
+    case 10: /* xebecsecsize: the real S1410A's 256/512 jumper */
+      if (value == 256 || value == 512)
+        trs_xebec_secsize = value;
+      else
+        error("xebecsecsize must be 256 or 512");
+      break;
+    case 11: /* omtisecsize: the real OMTI 5527's 256/512/1024 jumper */
+      if (value == 256 || value == 512 || value == 1024)
+        trs_omti_secsize = value;
+      else
+        error("omtisecsize must be 256, 512, or 1024");
       break;
   }
 }

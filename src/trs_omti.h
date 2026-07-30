@@ -38,6 +38,15 @@
 #ifndef _TRS_OMTI_H
 #define _TRS_OMTI_H
 
+/*
+ * Sector size in bytes, the OMTI 5527's 256/512/1024 jumper. Read at
+ * poweron by trs_omti_init(); changing it takes effect on the next
+ * reset, same as moving a physical jumper would. Defaults to 512,
+ * the size the ST-506/MFM drives (e.g. the Seagate ST225) it was
+ * paired with used; -omtisecsize overrides it.
+ */
+extern int   trs_omti_secsize;
+
 extern void  trs_omti_init(int poweron);
 extern void  trs_omti_attach(int drive, const char *diskname);
 extern void  trs_omti_remove(int drive);
