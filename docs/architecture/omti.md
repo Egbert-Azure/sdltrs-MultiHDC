@@ -104,7 +104,7 @@ This backend's write paths never check the slot's write-protect flag themselves.
 ## Key functions in `trs_omti.c`
 
 - `trs_omti_init(poweron)` — power-on/reset; on `poweron` also opens any attached drive images and resets `fillbuf` to `0xE5`.
-- `trs_omti_attach(drive, filename)` / `trs_omti_remove(drive)` — this backend's own bookkeeping for a slot change. Called from `trs_hdctl.c`, not directly by the GUI or CLI: attaching is a slot operation and reaches every backend that can address the unit. See [`hdctl.md`](hdctl.md).
+- `trs_omti_attach(drive, filename)` — this backend's own bookkeeping for a slot change. Called from `trs_hdctl.c`, not directly by the GUI or CLI: attaching is a slot operation and reaches every backend that can address the unit. See [`hdctl.md`](hdctl.md). (There is no `trs_omti_remove()`: removal had no backend-specific state to clean up, so `hdctl_remove()` goes straight to `hard_slot_remove()` — see #19.)
 - `trs_omti_in(port)` / `trs_omti_out(port, value)` — the Z80 I/O trap entry points, dispatched from `src/trs_io.c`'s `GENIE3S` block.
 - `omti_command()` — decodes a completed 6-byte CDB and dispatches to the command table above.
 - `omti_seek(lun, cyl, head, sector)` — the flat-sector-to-CHS math, bounds check, and `fseek()`.

@@ -158,7 +158,7 @@ The write path does not check the flag itself. A protected image is opened read-
 ## Key functions
 
 - `trs_xebec_init(poweron)` — power-on/reset, and also the bus-release path from a write to port `0x01`.
-- `trs_xebec_attach(drive, filename)` / `trs_xebec_remove(drive)` — slot bookkeeping, called from `trs_hdctl.c`, not directly.
+- `trs_xebec_attach(drive, filename)` — slot bookkeeping, called from `trs_hdctl.c`, not directly. (There is no `trs_xebec_remove()`: removal had no backend-specific state to clean up, so `hdctl_remove()` goes straight to `hard_slot_remove()` — see #19.)
 - `trs_xebec_tcs_in(port)` / `trs_xebec_tcs_out(port, value)` — the I/O trap entry points, dispatched from `trs_io.c`'s `GENIE3S` block.
 - `xebec_command()` — decodes a completed DCB and dispatches.
 - `xebec_seek(lun, lba)` — flat LBA to CHS, then `fseek()` through `hard_image_offset()`.

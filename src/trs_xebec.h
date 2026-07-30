@@ -58,7 +58,6 @@ extern int   trs_xebec_secsize;
 
 extern void  trs_xebec_init(int poweron);
 extern void  trs_xebec_attach(int drive, const char *diskname);
-extern void  trs_xebec_remove(int drive);
 extern int   trs_xebec_tcs_in(int port);
 extern void  trs_xebec_tcs_out(int port, int value);
 
