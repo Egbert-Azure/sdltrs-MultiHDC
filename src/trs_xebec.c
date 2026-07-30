@@ -42,8 +42,11 @@
  *
  * Disk images use the same 256-byte Reed header (reed.h) as trs_hard.c
  * and trs_omti.c. As with OMTI, the manual gives no live sector-size
- * register, so a fixed 512 bytes/sector (typical of the ST-506/MFM
- * drives the S1410A was paired with) is used unconditionally.
+ * register, so a fixed size is used unconditionally: 256 bytes/sector,
+ * per TRS_XEBEC_TCS_SECSIZE (trs_xebec.h) -- the value GDOS 2.4's driver
+ * was observed to run the S1410 at, not the ST-506/MFM-typical 512.
+ * This is a static property of the adapter (a real S1410A jumper), so it
+ * is set once at reset, not re-established on every SEL strobe.
  */
 
 #include <errno.h>
@@ -61,7 +64,6 @@
 
 #define XEBEC_SEC_PER_TRK 32     /* fallback if the header omits head count */
 #define XEBEC_MAXHEADS 8
-#define XEBEC_DEFAULT_SECSIZE 512
 #define XEBEC_SECBUFSIZE 1024
 
 /*
@@ -171,7 +173,7 @@ void trs_xebec_init(int poweron)
   if (poweron) {
     int i;
 
-    state.secsize = XEBEC_DEFAULT_SECSIZE;
+    state.secsize = TRS_XEBEC_TCS_SECSIZE;
     memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
@@ -249,9 +251,10 @@ void trs_xebec_tcs_out(int port, int value)
     break;
   case TRS_XEBEC_TCS_SEL:
     /* Respond to selection only when addressed as controller 0 (data
-     * bus bit 0), the only ID GDOS's driver ever selects. */
+     * bus bit 0), the only ID GDOS's driver ever selects. Sector size is
+     * a static adapter property (see trs_xebec_init()), not something a
+     * bus event re-establishes. */
     if (state.phase == XEBEC_PH_IDLE && (state.busdata & 0x01)) {
-      state.secsize = TRS_XEBEC_TCS_SECSIZE;
       state.phase = XEBEC_PH_DCB;
       state.dcb_index = 0;
       state.status = XEBEC_STATUS_DCB;
