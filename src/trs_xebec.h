@@ -48,6 +48,14 @@
 #ifndef _TRS_XEBEC_H
 #define _TRS_XEBEC_H
 
+/*
+ * Sector size in bytes, the real S1410A's 256/512 jumper. Read at
+ * poweron by trs_xebec_init(); changing it takes effect on the next
+ * reset, same as moving a physical jumper would. Defaults to
+ * TRS_XEBEC_TCS_SECSIZE; -xebecsecsize overrides it.
+ */
+extern int   trs_xebec_secsize;
+
 extern void  trs_xebec_init(int poweron);
 extern void  trs_xebec_attach(int drive, const char *diskname);
 extern void  trs_xebec_remove(int drive);
