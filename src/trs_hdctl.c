@@ -49,9 +49,16 @@ void hdctl_attach(int unit, const char *filename)
 
 void hdctl_remove(int unit)
 {
-  if (unit < TRS_HARD_MAXDRIVES)  trs_hard_remove(unit);
-  if (unit < TRS_OMTI_MAXDRIVES)  trs_omti_remove(unit);
-  if (unit < TRS_XEBEC_MAXDRIVES) trs_xebec_remove(unit);
+  /* trs_hard_remove() carries a real side effect (the xtrshard import/
+   * export hook) so it stays a call of its own. OMTI and Xebec have no
+   * such bookkeeping -- both used to have an identical wrapper doing
+   * nothing but this, so removal goes straight to the shared slot.
+   * TRS_HARD_MAXDRIVES is HARD_IMAGE_SLOTS, the largest of the three
+   * (see trs_hard_image.h), so it bounds every valid unit. */
+  if (unit < TRS_HARD_MAXDRIVES) {
+    trs_hard_remove(unit);
+    hard_slot_remove(unit);
+  }
 }
 
 const char *hdctl_getfilename(int unit)

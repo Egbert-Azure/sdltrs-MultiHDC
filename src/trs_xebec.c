@@ -195,12 +195,7 @@ void trs_xebec_attach(int drive, const char *diskname)
   snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
 
   if (xebec_open(drive) != 0)
-    trs_xebec_remove(drive);
-}
-
-void trs_xebec_remove(int drive)
-{
-  hard_slot_remove(drive);
+    hard_slot_remove(drive);
 }
 
 /*

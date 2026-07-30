@@ -36,9 +36,9 @@ const char *hdctl_getfilename(int unit)
 }
 ```
 
-There is nothing to ask a backend. The image lives once, in the shared slot table, and its filename, write-protect flag and geometry are properties of the image — the same answer whichever controller you ask. Each backend still publishes its own `trs_omti_getfilename()` / `trs_xebec_getfilename()` and friends, but those now just return the same `hard_slot[unit]` fields and have no callers left; only the WD1000's `trs_hard_getfilename()` is still used directly, by `trs_disk.c` and `trs_imp_exp.c`. New code should call the `hdctl_` form.
+There is nothing to ask a backend. The image lives once, in the shared slot table, and its filename, write-protect flag and geometry are properties of the image — the same answer whichever controller you ask. OMTI and Xebec never had their own `_getfilename()`/`_getwriteprotect()`/`_getgeometry()` equivalents worth keeping and don't now; only the WD1000's `trs_hard_getfilename()` is still used directly, by `trs_disk.c` and `trs_imp_exp.c`. New code should call the `hdctl_` form.
 
-**Attach and remove** are the fan-out:
+**Attach** is a real fan-out — every backend that can reach the unit needs told, because each one caches its own open `FILE *` and decoded geometry, and skipping one would leave it holding a stale handle to a disk that is no longer there:
 
 ```c
 void hdctl_attach(int unit, const char *filename)
@@ -49,9 +49,23 @@ void hdctl_attach(int unit, const char *filename)
 }
 ```
 
-The image itself is opened once by the image layer. What each backend still needs told is *its own bookkeeping* — its open `FILE *`, its decoded geometry cached at the sector size it uses, any controller state that has to be reset because the disk underneath changed. Skipping a backend here would leave it holding a stale handle to a disk that is no longer there.
+The image itself is opened once by the image layer; what each backend needs told is *its own bookkeeping*.
 
 The `unit <` guards are the LUN limit, written as a comparison against each backend's own published cap rather than a hardcoded 2. `TRS_HARD_MAXDRIVES` is 4 (WD1000's two-bit SDH drive field); `TRS_OMTI_MAXDRIVES` and `TRS_XEBEC_MAXDRIVES` are 2 (1-bit SASI LUN). Change a cap in one of the controller headers and this file follows automatically.
+
+**Remove is not a fan-out**, unlike attach — removal has no per-backend geometry/handle to update, only the shared slot to clear, plus one real side effect on the WD1000 side (the xtrshard import/export hook):
+
+```c
+void hdctl_remove(int unit)
+{
+  if (unit < TRS_HARD_MAXDRIVES) {
+    trs_hard_remove(unit);
+    hard_slot_remove(unit);
+  }
+}
+```
+
+OMTI and Xebec used to each have their own `trs_omti_remove()`/`trs_xebec_remove()`, but both were pure `{ hard_slot_remove(drive); }` pass-throughs with no backend-specific bookkeeping — removed as dead wrappers (#19). `TRS_HARD_MAXDRIVES` alone bounds every valid unit here since it equals `HARD_IMAGE_SLOTS`, the largest of the three caps (see `controller-abstraction.md`).
 
 `hdctl_slot_wd1000_only()` is the same idea inverted:
 

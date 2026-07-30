@@ -170,12 +170,7 @@ void trs_omti_attach(int drive, const char *diskname)
   snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
 
   if (omti_open(drive) != 0)
-    trs_omti_remove(drive);
-}
-
-void trs_omti_remove(int drive)
-{
-  hard_slot_remove(drive);
+    hard_slot_remove(drive);
 }
 
 /* Read from an I/O port mapped to the controller */
