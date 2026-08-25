@@ -11,10 +11,11 @@
 #   2  holte   Holte CP/M 3.0  Sopp EPROM      OMTI   g3s-omti-WORKING.hdv
 #   3  kaempf  Kaempf CP/M 2.2 standard EPROM  Xebec  (floppy only, no HD yet)
 #   4  z3plus  as 2, but on    g3s-omti-Z3Plus.hdv (same system, more tools)
+#   5  calvados CalvaDOS       Sopp EPROM      OMTI   calvados-20260824.hdv
 #
 # Usage:
 #   ./run-multihdc.command          # menu -- this is what a Finder double-click gets
-#   ./run-multihdc.command gdos     # or 1 / holte / 2 / kaempf / 3 / z3plus / 4
+#   ./run-multihdc.command gdos     # or 1 / holte / 2 / kaempf / 3 / z3plus / 4 / calvados / 5
 #
 # Each scenario writes its own run-<name>.t8c and passes every floppy and
 # hard-disk slot explicitly, so ~/.sdltrs.t8c is never read and nothing stale
@@ -47,8 +48,9 @@ if [ -z "$choice" ]; then
   echo
   echo "  1  GDOS 2.4         standard EPROM   Xebec   drives 5/6"
   echo "  2  Holte CP/M 3.0   Sopp EPROM       OMTI    boots from HD, C: and D:"
-  echo "  3  Kaempf CP/M 2.2   standard EPROM   Xebec   boots from floppy"
+  echo "  3  Kaempf CP/M 2.2  standard EPROM   Xebec   boots from floppy"
   echo "  4  Holte CP/M 3.0   Sopp EPROM       OMTI    Z3Plus image (more tools)"
+  echo "  5  CalvaDOS         Sopp EPROM       OMTI    boots from HD"
   echo
   read -r -p "Choice [1]: " choice
   choice="${choice:-1}"
@@ -66,6 +68,7 @@ case "$(echo "$choice" | tr '[:upper:]' '[:lower:]')" in
 0x00-0x02 and offers it as drives 5 and 6.
 Try:  PD 5      (also GENDIR 5 / DIR 5; HDFORMAT, confirm with JA, to reformat)"
     ;;
+
   2|holte|omti)
     NAME="holte-omti"
     LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller"
@@ -77,6 +80,7 @@ Try:  PD 5      (also GENDIR 5 / DIR 5; HDFORMAT, confirm with JA, to reformat)"
 loader, RESBIOS3/BNKBIOS3/RESBDOS3/BNKBDOS3, 60K TPA, then C>.
 C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
     ;;
+
   3|kaempf|kämpf|cpm22)
     NAME="kaempf-xebec"
     LABEL="Kaempf CP/M 2.2 -- standard EPROM, Xebec controller"
@@ -87,17 +91,9 @@ C: and D: are two partitions of this one image (cyl 2 and cyl 307)."
     HINT="Klaus Kaempf's Genie IIIs CP/M 2.2 (CBIOS 2.6 vom 3.3.85). Boots from floppy.
 Its CBIOS finds and initialises the Xebec at boot over ports 0x00-0x02 -- the
 'Initialisiere Winchester' line -- and the disk carries the hard-disk tooling:
-CONFIG (drive letters, incl. seven 'Winchesterteile'), WNFORMAT, FINDBAD, PDRIVE.
-
-No hard-disk image is attached: bringing a drive up from here is unfinished work,
-and the last attempt never wrote a byte to the image. To pick it up again, make a
-blank sized to what this CBIOS declares at boot (INITIALIZE DRIVE CHARACTERISTICS
-says 321 cylinders, 4 heads; over the TCS adapter the S1410 uses 256-byte sectors,
-so 321 x 4 x 32 = 41088 sectors), attach it with -hard0, and run CONFIG before
-WNFORMAT -- the two prior attempts skipped CONFIG.
-
-Note CONFIG saves to drive A:, i.e. it writes to the floppy image itself."
+CONFIG (drive letters, incl. seven 'Winchesterteile'), WNFORMAT, FINDBAD, PDRIVE."
     ;;
+
   4|z3plus|z3)
     NAME="holte-omti-z3plus"
     LABEL="Holte CP/M 3.0 -- Sopp HD-boot EPROM, OMTI controller (Z3Plus image)"
@@ -107,8 +103,21 @@ Note CONFIG saves to drive A:, i.e. it writes to the floppy image itself."
     HDV="$REPO/HDV/g3s-omti-Z3Plus.hdv"
     HINT="Same as test 2, on the Z3Plus image -- same system, more tools installed."
     ;;
+
+  5|calvados)
+    NAME="calvados-omti"
+    LABEL="CalvaDOS -- Sopp HD-boot EPROM, OMTI controller"
+    ROM="$ROM_OMTI"
+    CTL="omti"
+    FLOPPY=""
+    HDV="$REPO/HDV/calvados-20260824.hdv"
+    HINT="Boots straight off the CalvaDOS hard disk using the Sopp EPROM and OMTI
+controller. Same boot path as Holte CP/M 3.0: Genie IIIs banner, CP/M loader,
+then CalvaDOS system. No floppy required."
+    ;;
+
   *)
-    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 3/kaempf, 4/z3plus)."
+    die "Unknown scenario '$choice' (use 1/gdos, 2/holte, 3/kaempf, 4/z3plus, 5/calvados)."
     ;;
 esac
 
@@ -145,9 +154,6 @@ echo
 echo "Alt-D / Alt-F: floppy management   Alt-H: hard-disk management"
 echo
 
-# A hard-disk slot holds an image, not a controller: the image goes in
-# slot 0 and whichever controller the guest's OS drives serves it.  The
-# remaining slots are cleared explicitly so nothing stale leaks in.
 "$BIN" "$CFG" \
   -disk0 "$FLOPPY" -disk1 "" -disk2 "" -disk3 "" \
   -disk4 "" -disk5 "" -disk6 "" -disk7 "" \
