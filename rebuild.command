@@ -5,8 +5,8 @@
 # any other sdltrs checkouts you have are untouched.
 #
 # After a successful build, test with:
-#   boot_gdos24_xebec.command        -- boot GDOS 2.4 with the Xebec disk
-#   boot_gdos24_xebec_debug.command  -- same, with the zbx debugger enabled
+#   run-1-gdos24-xebec.command  -- boot GDOS 2.4 with the Xebec disk
+#   run-xebec-debug.command     -- same, with the zbx debugger enabled
 
 set -e
 cd "$(dirname "$0")"
@@ -25,6 +25,6 @@ echo
 echo "Done: $REPO/build/sdl2trs"
 ls -l "$REPO/build/sdl2trs"
 echo
-echo "Run boot_gdos24_xebec.command to boot GDOS 2.4 against it."
+echo "Run run-1-gdos24-xebec.command to boot GDOS 2.4 against it."
 read -n 1 -s -r -p "Press any key to close..."
 echo
