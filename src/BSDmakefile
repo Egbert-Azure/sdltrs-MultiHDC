@@ -10,6 +10,8 @@ SRCS	+= trs_cmd_rom.c
 SRCS	+= trs_cp500.c
 SRCS	+= trs_disk.c
 SRCS	+= trs_hard.c
+SRCS	+= trs_hard_image.c
+SRCS	+= trs_hdctl.c
 SRCS	+= trs_imp_exp.c
 SRCS	+= trs_interrupt.c
 SRCS	+= trs_io.c
@@ -24,6 +26,7 @@ SRCS	+= trs_sdl_keyboard.c
 SRCS	+= trs_state_save.c
 SRCS	+= trs_stringy.c
 SRCS	+= trs_uart.c
+SRCS	+= trs_xebec.c
 SRCS	+= z80.c
 SRCS	+= PasteManager.c
 

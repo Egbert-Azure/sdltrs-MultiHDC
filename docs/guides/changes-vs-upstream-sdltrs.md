@@ -9,7 +9,7 @@ The baseline for comparison is the upstream commit immediately before any hard-d
 1. **OMTI layer**, inherited from [`sdltrsOMTI`](https://github.com/Egbert-Azure/sdltrsOMTI): OMTI 5527 SASI controller emulation and its wiring.
 2. **Xebec layer**, this fork: the Xebec S1410 controller and the shared image/dispatch refactor.
 
-Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none removed. Of the 15, 13 appear in the Source table below; the other two are `src/Makefile` and `src/BSDmakefile`. This fork adds 8 further files to `src/`, bringing it to 55. The three remaining modified build files, `CMakeLists.txt`, `Makefile.am` and `meson.build`, sit at the repo root and so fall outside the 47. `configure.ac`, also root-level, is unchanged.
+Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none removed. Of the 15, 13 appear in the Source table below; the other two are `src/Makefile` and `src/BSDmakefile`. This fork adds 8 further files to `src/`, bringing it to 55. Two more modified build files, `CMakeLists.txt` and `Makefile.am`, sit at the repo root and so fall outside the 47; `configure.ac`, also root-level, is unchanged. A third root-level build file, `meson.build` (with `meson_options.txt`), existed upstream but has been removed here — see the Build table below.
 
 ## Files added (not in upstream)
 
@@ -28,10 +28,10 @@ Upstream's `src/` holds 47 files: 32 byte-for-byte identical, 15 modified, none 
 |------|--------|
 | `CMakeLists.txt` | Add the four new sources (`trs_omti.c`, `trs_xebec.c`, `trs_hard_image.c`, `trs_hdctl.c`). Primary build. |
 | `Makefile.am` | Same four sources, for the autotools build. |
-| `meson.build` | Same four sources. Had lagged at the OMTI-era list (`trs_omti.c` only) and so silently linked a binary without the Xebec, shared-image or slot code; brought back in sync. |
-| `src/Makefile`, `src/BSDmakefile` | OMTI-era only added `trs_omti.c`; not yet updated for `trs_xebec.c` / `trs_hard_image.c` / `trs_hdctl.c`. Known gap — use the CMake, autotools or meson build. |
+| `src/Makefile`, `src/BSDmakefile` | Same four sources, for the plain-`make` / BSD-`make` path — no configure or CMake bootstrap required, which is the reason to keep this path working: `make` (or a BSD's own `make`) is available on systems that don't have CMake. Had lagged at the OMTI-era list (`trs_omti.c` only); brought back in sync. |
+| `meson.build`, `meson_options.txt` | Removed. Never documented as a supported build in the README, not exercised by anything, and redundant with CMake/autotools/make — one fewer source list to keep in sync by hand. |
 
-Every source list has to be kept in sync by hand; there is no single source of truth. Miss one and that build system produces a binary with pieces of the hard-disk support silently absent, with no compile error. `CMakeLists.txt`, `Makefile.am` and `meson.build` currently agree on all 29 sources.
+Every source list has to be kept in sync by hand; there is no single source of truth. Miss one and that build system produces a binary with pieces of the hard-disk support silently absent, with no compile error. `CMakeLists.txt`, `Makefile.am`, `src/Makefile` and `src/BSDmakefile` currently agree on all 29 sources.
 
 `configure.ac` is unchanged.
 
