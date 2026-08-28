@@ -278,6 +278,47 @@ def load_symbols(path=_SYMBOL_FILE):
 
 _IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
+# pasmo has no per-line listing output, only a label->address symbol table
+# (its 3rd positional argument). That only resolves a source-line breakpoint
+# set on a line that *is* a label -- most instruction lines aren't -- but
+# it's exactly the addresses worth breaking at (subroutine entry points),
+# and needs no new machinery beyond pasmo itself.
+_PASMO_SYM_RE = re.compile(r"^(\S+)\s+EQU\s+0?([0-9A-Fa-f]+)H\s*$", re.IGNORECASE)
+
+
+def parse_pasmo_symbols(sym_path):
+    """{name: address} from a pasmo symbol-table file."""
+    symbols = {}
+    with open(sym_path) as f:
+        for line in f:
+            m = _PASMO_SYM_RE.match(line.strip())
+            if m:
+                symbols[m.group(1)] = int(m.group(2), 16)
+    return symbols
+
+
+_LABEL_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*(\S*)")
+
+
+def line_labels(asm_path):
+    """{line_number (1-based): label} for lines that define a label at an
+    address this file's own assembly generates -- i.e. NOT an EQU line,
+    which names an address elsewhere (e.g. a ROM/DOS entry point) rather
+    than emitting code at its own line."""
+    labels = {}
+    with open(asm_path) as f:
+        for lineno, line in enumerate(f, start=1):
+            if line[:1] in (" ", "\t", ";", "\n", ""):
+                continue
+            m = _LABEL_LINE_RE.match(line)
+            if not m:
+                continue
+            name, next_tok = m.group(1), m.group(2)
+            if next_tok.upper() == "EQU":
+                continue
+            labels[lineno] = name
+    return labels
+
 
 # print_memory() in debug.c prints, per row of up to 16 bytes:
 #   "%.4x: " (6 chars) + 16 * "%.2x " (3 chars each, space-padded past the
@@ -345,6 +386,11 @@ class Adapter:
         # address -> zbx trap-table index, for breakpoints *this adapter*
         # armed via setInstructionBreakpoints (see cmd_setInstructionBreakpoints).
         self.instr_bp_indices = {}
+        # source path -> {line: zbx trap-table index}, for breakpoints armed
+        # via setBreakpoints (see cmd_setBreakpoints). Kept separate from
+        # instr_bp_indices since DAP resends each source file's *own* full
+        # set independently -- clearing one must never touch the other.
+        self.line_bp_indices = {}
         # address -> name, from gdos-2.4-addresses.md (see load_symbols).
         # Used both ways: cmd_disassemble annotates addresses with names,
         # cmd_evaluate substitutes names back to hex before zbx ever sees
@@ -420,20 +466,69 @@ class Adapter:
 
     # -- breakpoints --
 
-    # Source-line (editor gutter) breakpoints can't be resolved to
-    # addresses: that needs a line->address correlation (e.g. a pasmo `-l`
-    # listing), which nothing here generates or parses yet. Real, working
-    # breakpoints exist today via cmd_setInstructionBreakpoints below --
-    # set them from the Disassembly View gutter instead.
+    def _assemble_symbols(self, asm_path):
+        """pasmo's label->address table for asm_path, or None if it won't
+        assemble (e.g. mid-edit syntax error) -- distinct from "assembled
+        fine but this particular label isn't in it"."""
+        with tempfile.TemporaryDirectory() as td:
+            obj = os.path.join(td, "out.bin")
+            sym = os.path.join(td, "out.sym")
+            try:
+                subprocess.run(["pasmo", asm_path, obj, sym],
+                                capture_output=True, text=True, timeout=15,
+                                cwd=os.path.dirname(asm_path) or ".", check=True)
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+                log(f"pasmo failed for {asm_path}: {e}")
+                return None
+            return parse_pasmo_symbols(sym)
+
+    # Source-line breakpoints only resolve on lines that are themselves a
+    # label -- pasmo has no per-line listing, only a label->address table
+    # (see _assemble_symbols / line_labels), so a line with no label at its
+    # start has no address to give zbx. That covers subroutine entry points,
+    # which is most of what's worth breaking at; anything else still works
+    # from the Disassembly View via setInstructionBreakpoints.
     def cmd_setBreakpoints(self, req):
-        src_bps = req["arguments"].get("breakpoints", [])
-        body = {"breakpoints": [
-            {"verified": False, "line": bp.get("line"),
-             "message": "no source-line to address mapping yet -- set "
-                        "breakpoints from the Disassembly View instead"}
-            for bp in src_bps
-        ]}
-        self.dap.send_response(req, body=body)
+        args = req["arguments"]
+        path = args["source"]["path"]
+        src_bps = args.get("breakpoints", [])
+
+        for idx in self.line_bp_indices.pop(path, {}).values():
+            self.zbx.send_and_wait(f"del {idx}")
+
+        labels = line_labels(path)
+        symbols = self._assemble_symbols(path)
+
+        out = []
+        new_indices = {}
+        for bp in src_bps:
+            line = bp["line"]
+            name = labels.get(line)
+            addr = symbols.get(name) if (symbols is not None and name) else None
+            if addr is None:
+                if symbols is None:
+                    message = "pasmo could not assemble this file"
+                elif name is None:
+                    message = ("this line has no label -- set the breakpoint "
+                               "on a labeled line, or from the Disassembly View instead")
+                else:
+                    message = f"'{name}' is not in pasmo's symbol table"
+                out.append({"verified": False, "line": line, "message": message})
+                continue
+            text = self.zbx.send_and_wait(f"b {addr:x}")
+            m = re.search(r"\[(\d+)\] at ([0-9a-fA-F]{4})", text)
+            if m:
+                idx, resolved = int(m.group(1)), int(m.group(2), 16)
+                new_indices[line] = idx
+                out.append({"verified": True, "line": line, "instructionReference": f"0x{resolved:04x}"})
+            else:
+                out.append({
+                    "verified": False, "line": line,
+                    "message": text.strip() or "zbx did not confirm the breakpoint",
+                })
+
+        self.line_bp_indices[path] = new_indices
+        self.dap.send_response(req, body={"breakpoints": out})
 
     def cmd_setExceptionBreakpoints(self, req):
         self.dap.send_response(req, body={})
