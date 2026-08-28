@@ -255,6 +255,30 @@ def parse_addr(ref):
     return int(ref, 16) & 0xFFFF
 
 
+_SYMBOL_ROW_RE = re.compile(
+    r"^\|\s*`([0-9A-Fa-f]{4})`\s*\|\s*`([A-Za-z_][A-Za-z0-9_]*)`\s*\|")
+_SYMBOL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gdos-2.4-addresses.md")
+
+
+def load_symbols(path=_SYMBOL_FILE):
+    """Reads the `| \`addr\` | \`NAME\` | ... |` table this project maintains
+    by hand (see the file itself) into {address: name}. Missing file (a
+    workspace with no such table yet) is not an error -- just no symbols."""
+    symbols = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                m = _SYMBOL_ROW_RE.match(line)
+                if m:
+                    symbols[int(m.group(1), 16)] = m.group(2)
+    except FileNotFoundError:
+        pass
+    return symbols
+
+
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
 # print_memory() in debug.c prints, per row of up to 16 bytes:
 #   "%.4x: " (6 chars) + 16 * "%.2x " (3 chars each, space-padded past the
 #   last real byte) + "    " (4 chars) + one raw ASCII char per byte.
@@ -321,6 +345,22 @@ class Adapter:
         # address -> zbx trap-table index, for breakpoints *this adapter*
         # armed via setInstructionBreakpoints (see cmd_setInstructionBreakpoints).
         self.instr_bp_indices = {}
+        # address -> name, from gdos-2.4-addresses.md (see load_symbols).
+        # Used both ways: cmd_disassemble annotates addresses with names,
+        # cmd_evaluate substitutes names back to hex before zbx ever sees
+        # them, since zbx itself only understands bare addresses.
+        self.symbols = load_symbols()
+        self.symbol_addrs = {name.upper(): addr for addr, name in self.symbols.items()}
+
+    def _resolve_symbols(self, text):
+        """Replaces whole-word symbol names (case-insensitive) with their
+        hex address, so the Debug Console can take `b DOSERR` as well as
+        `b 4409`. zbx commands (b, del, peek, d, ...) are short lowercase
+        words that never collide with a table name."""
+        def repl(m):
+            addr = self.symbol_addrs.get(m.group(0).upper())
+            return f"{addr:x}" if addr is not None else m.group(0)
+        return _IDENT_RE.sub(repl, text)
 
     def run(self):
         while True:
@@ -524,7 +564,8 @@ class Adapter:
         if args.get("context") not in (None, "repl"):
             self.dap.send_response(req, body={"result": "", "variablesReference": 0})
             return
-        text = self.zbx.send_and_wait(args["expression"])
+        expr = self._resolve_symbols(args["expression"])
+        text = self.zbx.send_and_wait(expr)
         self.dap.send_response(req, body={"result": text.rstrip("\r\n"), "variablesReference": 0})
 
     # -- memory / disassembly --
@@ -603,11 +644,15 @@ class Adapter:
             lines_to_skip = max(instr_offset, 0)
             lines = self._dis_lines(base, lines_to_skip + remaining)
             for addr, hexbytes, mnem in lines[lines_to_skip:]:
-                instructions.append({
+                instr = {
                     "address": f"0x{addr:04x}",
                     "instructionBytes": hexbytes,
                     "instruction": mnem,
-                })
+                }
+                symbol = self.symbols.get(addr)
+                if symbol:
+                    instr["symbol"] = symbol
+                instructions.append(instr)
 
         # zbx always returns what it's asked for, but pad defensively so a
         # short read (e.g. session torn down mid-request) still returns
