@@ -19,21 +19,33 @@ Re-run after editing `adapter.py` or `extension/`, then reload the window.
 `sdl2trs` (binary path), `rom` (boot ROM image, required), `floppy`/`hard0`
 (optional disk images), `omtisecsize` (OMTI hard disks), `stopOnEntry`.
 
-## What works
+## Features
 
 - Launch, stop-on-entry, step (`n`), Continue. No step-over -- zbx has none,
   so a CALL always steps into the callee.
 - Registers, in the Variables view under "Registers".
 - Read Memory (`readMemory`, backed by zbx `peek`).
-- Disassembly View: live at PC, instruction bytes + mnemonic.
+- Disassembly View: live at PC, instruction bytes + mnemonic, labeled with
+  names from `gdos-2.4-addresses.md` where one is known.
 - Instruction breakpoints: click the gutter in the Disassembly View. Real
   `b <addr>` in zbx, reported back verified.
+- Source-line breakpoints on labeled lines (subroutine entry points): the
+  file is assembled with pasmo and the label at that line resolved to a
+  real address. Unlabeled lines fall back to the Disassembly View.
+- Debug Console (`evaluate`): type any zbx command directly, e.g. `dump`,
+  `peek 4200,4210`, or `b DOSERR` -- symbol names are resolved to hex first.
+  Hover/watch never touch zbx, since a zbx command isn't side-effect-free.
+- `cmdinfo.py`: standalone parser for a TRS-80 `/CMD` file's load blocks
+  and entry address, for setting a breakpoint before running a program.
+
+<!-- screenshot: Disassembly View with a live breakpoint and labeled addresses -->
+<!-- screenshot: Debug Console evaluating a zbx command -->
 
 ## Known limits
 
-- **Source-line breakpoints don't resolve.** No address for a `.asm` line
-  (needs a pasmo `-l` listing correlation, not built). Use the Disassembly
-  View instead.
+- **Source-line breakpoints need a label.** pasmo has no per-line listing,
+  only a label->address table, so an unlabeled instruction line has no
+  address to give zbx. Set it on the Disassembly View instead.
 - **Continue is one-way.** zbx's REPL blocks on `g` with no async break-in
   (no SIGINT handling). The only way back to stopped is a breakpoint. Don't
   Continue past code that spin-waits on real hardware (e.g. the boot ROM's
