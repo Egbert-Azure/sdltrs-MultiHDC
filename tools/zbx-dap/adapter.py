@@ -512,6 +512,21 @@ class Adapter:
             variables.append(v)
         self.dap.send_response(req, body={"variables": variables})
 
+    # VS Code fires evaluate uninvited for hovers and watch expressions, not
+    # just Debug Console input -- and a zbx command is not a side-effect-free
+    # expression (`g` continues, `n`/`s` step, `del N` drops a breakpoint).
+    # Only the Debug Console (context "repl") gets to drive zbx directly;
+    # other contexts get an empty result instead of accidentally running
+    # whatever text VS Code hovered over as a zbx command. `g` will still
+    # block here until zbx's own timeout -- use Continue for that instead.
+    def cmd_evaluate(self, req):
+        args = req["arguments"]
+        if args.get("context") not in (None, "repl"):
+            self.dap.send_response(req, body={"result": "", "variablesReference": 0})
+            return
+        text = self.zbx.send_and_wait(args["expression"])
+        self.dap.send_response(req, body={"result": text.rstrip("\r\n"), "variablesReference": 0})
+
     # -- memory / disassembly --
 
     def cmd_readMemory(self, req):
