@@ -1,0 +1,67 @@
+{
+    "name": "zbx-debug",
+    "displayName": "zbx Debug (sdltrs-MultiHDC)",
+    "description": "VS Code debug adapter that drives sdl2trs's built-in zbx console. Local, unpublished -- see tools/zbx-dap in sdltrs-MultiHDC.",
+    "version": "0.0.1",
+    "publisher": "local",
+    "engines": { "vscode": "^1.60.0" },
+    "categories": ["Debuggers"],
+    "main": "./extension.js",
+    "activationEvents": ["onDebugResolve:zbx"],
+    "contributes": {
+        "debuggers": [
+            {
+                "type": "zbx",
+                "label": "zbx (sdltrs-MultiHDC)",
+                "languages": ["z80-macroasm"],
+                "configurationAttributes": {
+                    "launch": {
+                        "required": ["sdl2trs", "rom"],
+                        "properties": {
+                            "sdl2trs": {
+                                "type": "string",
+                                "description": "Path to the sdl2trs binary."
+                            },
+                            "rom": {
+                                "type": "string",
+                                "description": "Boot ROM/EPROM image (romfile1)."
+                            },
+                            "floppy": {
+                                "type": "string",
+                                "description": "Optional .dmk image for -disk0.",
+                                "default": ""
+                            },
+                            "hard0": {
+                                "type": "string",
+                                "description": "Optional .hdv image for -hard0.",
+                                "default": ""
+                            },
+                            "omtisecsize": {
+                                "type": "number",
+                                "description": "OMTI sector size, if hard0 is an OMTI image.",
+                                "default": 0
+                            },
+                            "stopOnEntry": {
+                                "type": "boolean",
+                                "description": "Stop at 0000h (zbx's own entry stop) before running.",
+                                "default": true
+                            }
+                        }
+                    }
+                },
+                "initialConfigurations": [
+                    {
+                        "type": "zbx",
+                        "request": "launch",
+                        "name": "zbx: boot ROM only",
+                        "sdl2trs": "${workspaceFolder}/sdl2trs",
+                        "rom": "${workspaceFolder}/path/to/rom.bin",
+                        "floppy": "",
+                        "hard0": "",
+                        "stopOnEntry": true
+                    }
+                ]
+            }
+        ]
+    }
+}
