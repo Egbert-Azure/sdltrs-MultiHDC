@@ -64,8 +64,8 @@
 #define XEBECDEBUG2 (1 << 5)  /* show all commands */
 
 #define XEBEC_SEC_PER_TRK 32     /* fallback if the header omits head count */
-#define XEBEC_MAXHEADS 8
-#define XEBEC_SECBUFSIZE 1024
+#define XEBEC_MAXHEADS 4
+#define XEBEC_SECBUFSIZE 512
 
 /*
  * Composite status-register values for each phase, built from the
