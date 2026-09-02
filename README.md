@@ -2,7 +2,7 @@
 
 # sdltrs-MultiHDC
 
-A TRS-80 / TCS Genie IIIs emulator that emulates three distinct hard-disk controllers: the OMTI 5527, the WD1000/1010, and the Xebec S1410 SASI. It is a fork of `sdltrsOMTI`, itself a fork of [SDL2TRS](https://gitlab.com/jengun/sdltrs) / xtrs, with full history preserved.
+A TRS-80 / TCS Genie IIIs emulator that emulates three distinct hard-disk controllers: the OMTI 5527, the WD1000/1010, and the Xebec S1410 SASI. It derives from `sdltrsOMTI`, itself based on [SDL2TRS](https://gitlab.com/jengun/sdltrs) / xtrs. The tree was started fresh rather than forked, so upstream commit history is not preserved here — see the upstream projects for that. Per-file copyright headers and `AUTHORS.md` record which code came from where.
 
 The single remote is `origin` → [`github.com/Egbert-Azure/sdltrs-MultiHDC`](https://github.com/Egbert-Azure/sdltrs-MultiHDC). The GitHub repo was renamed from `sdltrsOMTI` and old URLs auto-redirect. Development happens on `main`.
 
