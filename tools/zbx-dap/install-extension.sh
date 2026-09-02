@@ -6,9 +6,8 @@
 # Installs the local zbx debug-adapter VS Code extension into the
 # user's VS Code extensions directory.
 #
-# Debug Adapter Protocol bridge for zbx, the sdltrs Z80 debugger.
-# Drives zbx as an external process; contains no zbx or xtrs code.
-# See LICENSE for the full BSD 2-Clause text.
+# Part of the zbx Debug Adapter Protocol bridge. Contains no zbx or
+# xtrs code. See LICENSE for the full BSD 2-Clause text.
 
 # /tools/zbx-dap/install-extension.sh
 #
