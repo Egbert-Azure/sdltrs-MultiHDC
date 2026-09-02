@@ -81,4 +81,6 @@ The disk images, boot EPROMs, and reverse-engineering notes this emulator is use
 
 ## License
 
-[BSD 2-Clause](LICENSE), inherited from the upstream SDL2TRS / xtrs projects. See [xtrs.LICENSE](xtrs.LICENSE) for the xtrs-derived portions.
+BSD 2-Clause. Portions copyright Mark Grebe and Jens Guenther; the OMTI
+5527, Xebec S1410, hard-disk slot, and image-layer code is copyright
+Egbert H. Schroeer. See LICENSE and AUTHORS.md.

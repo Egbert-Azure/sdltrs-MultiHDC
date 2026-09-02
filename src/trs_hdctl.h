@@ -1,4 +1,7 @@
-/*
+/* SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 Egbert H. Schroeer
+ *
  * Hard-disk slots.
  *
  * A slot holds a disk image, not a controller.  The emulator has three
@@ -19,6 +22,9 @@
  * Slot count is the WD1000's, the largest of the three.  The SASI
  * controllers reach only units 0 and 1, which their own 1-bit LUN already
  * enforces — nothing here needs to know that.
+ *
+ * Original work for sdltrs-MultiHDC. Not derived from xtrs, SDLTRS,
+ * or SDL2TRS. See LICENSE for the full BSD 2-Clause text.
  */
 
 #ifndef _TRS_HDCTL_H

@@ -2,6 +2,10 @@ BSD 2-Clause License
 
 Copyright (C) 2006-2011, Mark Grebe
 Copyright (C) 2018-2026, Jens Guenther
+Copyright (c) 2026 Egbert H. Schroeer
+    (OMTI 5527 and Xebec S1410 controller emulation, hard-disk slot
+    abstraction, and the shared Reed-header image layer)
+
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
