@@ -10,6 +10,30 @@ For what this backend shares with the other two, see [`controller-abstraction.md
 
 A TCS Genie IIIs can carry an OMTI 5527 SASI/MFM hard-disk controller card, typically driving a Seagate ST225 or similar, mapped at Z80 I/O ports 0x40–0x43. This range is OMTI-exclusive: the Xebec is reached only at `0x00`–`0x02`, and the WD1000's registers sit at `0x50`–`0x57` on this machine. All three answer on their own ports whenever a disk is attached, and they read and write the same slots. The protocol was reverse-engineered from Thomas Holte's real CP/M 3.0 BIOS driver (`hd2.mac`) and boot-loader source (`ldrbiohd.mac`), not from official OMTI documentation. All based on notes in modified src codes of the Holte CP/M 3.0
 
+## Which OMTI
+
+The board fitted to this machine is an **OMTI 5527**, the RLL member of
+the SMS/OMTI 55xx ST506/ST412 controller family. That is what this
+emulation is written against.
+
+**From the period documentation.** SMS documented the MFM 5520 and the
+RLL 5527 in a single manual — *OMTI 5520/5527 Guide*, August 1987 — with
+identical installation, identical cabling (34-pin control, two 20-pin
+data), and a shared jumper and drive-table scheme. The parts differ in
+the encoding they drive onto the platter, not in how the host talks to
+them.
+[docs/reference/omti-5520-5527-guide-aug87.pdf], high confidence.
+
+**Observed on real hardware.** An MFM drive (Seagate ST-225) ran on the
+5527 in the original machine. The MFM/RLL split in the SMS literature
+describes how the parts were marketed and certified, not a limit the
+board enforces. First-hand, ~1992.
+
+**Interpretation.** Encoding sits below the SASI command layer and is
+invisible to the host, so `src/trs_omti.c` — which impleinvisible to the host, so `sr only — is equally valid for a 5520. No claim is made
+here about which drive was fitted at any particular stage; see the
+CalvaDOS stage chronology for that.
+
 ## Port map
 
 | Port | Direction | Meaning |
