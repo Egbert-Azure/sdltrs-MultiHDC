@@ -1,4 +1,7 @@
-/*
+/* SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 Egbert H. Schroeer
+ *
  * Shared Reed-format hard-disk image handling.
  *
  * The three hard-disk controller backends in this emulator — the Western
@@ -13,6 +16,9 @@
  * image file and its geometry, never about controller registers, phases,
  * or status bytes.  Each backend keeps its own controller state and wraps
  * these helpers with whatever protocol-specific side effects it needs.
+ *
+ * Original work for sdltrs-MultiHDC. Not derived from xtrs, SDLTRS,
+ * or SDL2TRS. See LICENSE for the full BSD 2-Clause text.
  */
 
 #ifndef _TRS_HARD_IMAGE_H

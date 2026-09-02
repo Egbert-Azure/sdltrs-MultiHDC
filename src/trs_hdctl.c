@@ -1,10 +1,16 @@
-/*
+/* SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 Egbert H. Schroeer
+ *
  * Hard-disk slots.  See trs_hdctl.h for rationale: a slot holds an image,
  * not a controller, so attaching or removing one has to reach every
  * backend that can address that unit.  The image itself lives once, in the
  * shared slot table (trs_hard_image.h); these calls only keep each
  * backend's own bookkeeping — its open file handle and decoded geometry —
  * consistent with it.
+ *
+ * Original work for sdltrs-MultiHDC. Not derived from xtrs, SDLTRS,
+ * or SDL2TRS. See LICENSE for the full BSD 2-Clause text.
  */
 
 #include <stddef.h>

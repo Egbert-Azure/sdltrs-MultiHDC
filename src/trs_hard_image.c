@@ -1,8 +1,14 @@
-/*
+/* SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 Egbert H. Schroeer
+ *
  * Shared Reed-format hard-disk image handling.  See trs_hard_image.h for
  * the rationale: the WD1000/1010, OMTI 5527 and Xebec S1410 backends all
  * store disks in the same Reed .hdv format and decode geometry from it
  * identically, so that common code lives here rather than in triplicate.
+ *
+ * Original work for sdltrs-MultiHDC. Not derived from xtrs, SDLTRS,
+ * or SDL2TRS. See LICENSE for the full BSD 2-Clause text.
  */
 
 #include <errno.h>
