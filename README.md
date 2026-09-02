@@ -72,6 +72,13 @@ Longer references and the investigation history are in [`docs/`](docs/README.md)
 
 See [`changelog.md`](changelog.md) for the dated development history.
 
+## Tools
+
+[`tools/zbx-dap/`](tools/zbx-dap) — a Debug Adapter Protocol bridge for
+`zbx`, the built-in Z80 debugger, so breakpoints, stepping and register
+inspection work from VS Code instead of the raw zbx command line. See
+[`tools/zbx-dap/README.md`](tools/zbx-dap/README.md).
+
 ## Related repositories
 
 The disk images, boot EPROMs, and reverse-engineering notes this emulator is used with live in two companion archive repositories:
