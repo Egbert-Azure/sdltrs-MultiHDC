@@ -66,6 +66,13 @@ headers present in files under `src/`.
 - src/trs_omti.h
 - src/trs_xebec.c
 - src/trs_xebec.h
+- tools/zbx-dap/adapter.py
+- tools/zbx-dap/cmdinfo.py
+- tools/zbx-dap/extension/extension.js
+- tools/zbx-dap/extension/package.json
+- tools/zbx-dap/gdos-2.4-addresses.md
+- tools/zbx-dap/install-extension.sh
+- tools/zbx-dap/README.md
 
 Portions of `src/trs_hard.c` and `src/trs_hard.h` were modified for
 multi-controller dispatch; copyright in those files remains with

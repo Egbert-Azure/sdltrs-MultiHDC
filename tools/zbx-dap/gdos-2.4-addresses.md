@@ -125,3 +125,6 @@ stays `mXXXX` in the listings rather than acquiring a plausible-sounding name.
 | `F00D` | `GWORK` | hard-disk driver's work vector | this port's driver |
 | `F016` | `GDISP3` | hard-disk driver's dispatch table, slot 3 -- MEMDISK's hook | this port's driver |
 | `F040` | `GSTK` | hard-disk driver's stack | this port's driver |
+
+---
+Copyright (c) 2026 Egbert H. Schroeer. BSD 2-Clause; see [LICENSE](../../LICENSE).

@@ -1,3 +1,14 @@
+/* SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2026 Egbert H. Schroeer
+ *
+ * VS Code extension entry point: registers the zbx debug adapter type
+ * and launches adapter.py.
+ *
+ * Part of the zbx Debug Adapter Protocol bridge. Contains no zbx or
+ * xtrs code. See LICENSE for the full BSD 2-Clause text.
+ */
+
 // /tools/zbx-dap/extension/extension.js
 //
 // The whole extension: register the "zbx" debug type and point it at

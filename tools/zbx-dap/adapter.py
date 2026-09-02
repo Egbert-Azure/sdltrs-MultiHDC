@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Copyright (c) 2026 Egbert H. Schroeer
+#
+# Debug Adapter Protocol server that bridges VS Code to zbx, sdltrs's
+# built-in Z80 debugger.
+#
+# Debug Adapter Protocol bridge for zbx, the sdltrs Z80 debugger.
+# Drives zbx as an external process; contains no zbx or xtrs code.
+# See LICENSE for the full BSD 2-Clause text.
+
 # /tools/zbx-dap/adapter.py
 #
 # A Debug Adapter Protocol (DAP) server that drives sdl2trs's built-in zbx

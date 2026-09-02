@@ -1,4 +1,15 @@
 #!/bin/bash
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Copyright (c) 2026 Egbert H. Schroeer
+#
+# Installs the local zbx debug-adapter VS Code extension into the
+# user's VS Code extensions directory.
+#
+# Debug Adapter Protocol bridge for zbx, the sdltrs Z80 debugger.
+# Drives zbx as an external process; contains no zbx or xtrs code.
+# See LICENSE for the full BSD 2-Clause text.
+
 # /tools/zbx-dap/install-extension.sh
 #
 # Installs the local "zbx" debug type extension into VS Code's user

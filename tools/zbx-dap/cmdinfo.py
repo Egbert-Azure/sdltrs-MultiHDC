@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Copyright (c) 2026 Egbert H. Schroeer
+#
+# Parses a TRS-80 /CMD file's load blocks and prints its entry address.
+#
+# TRS-80 /CMD file parser, used alongside the zbx bridge. Contains no
+# zbx or xtrs code. See LICENSE for the full BSD 2-Clause text.
+
 """Parse a TRS-80 /CMD file: list its load blocks and print its entry address.
 
 A /CMD file is not a fixed-TPA image -- it's a sequence of tagged blocks.

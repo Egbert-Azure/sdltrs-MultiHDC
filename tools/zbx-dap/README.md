@@ -64,3 +64,6 @@ Re-run after editing `adapter.py` or `extension/`, then reload the window.
 
 Logs to `/tmp/zbx-dap.log` by default; set `ZBX_DAP_LOG` to override or
 unset it to disable.
+
+---
+Copyright (c) 2026 Egbert H. Schroeer. BSD 2-Clause; see [LICENSE](../../LICENSE).

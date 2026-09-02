@@ -4,6 +4,8 @@
     "description": "VS Code debug adapter that drives sdl2trs's built-in zbx console. Local, unpublished -- see tools/zbx-dap in sdltrs-MultiHDC.",
     "version": "0.0.1",
     "publisher": "local",
+    "license": "BSD-2-Clause",
+    "author": "Egbert H. Schroeer",
     "engines": { "vscode": "^1.60.0" },
     "categories": ["Debuggers"],
     "main": "./extension.js",
