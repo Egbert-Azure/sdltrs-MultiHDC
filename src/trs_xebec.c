@@ -171,12 +171,12 @@ void trs_xebec_init(int poweron)
   state.busdata = 0;
   state.final_status = 0;
   state.status_index = 0;
-  memset(state.buf, 0, sizeof(state.buf));
 
   if (poweron) {
     int i;
 
     state.secsize = trs_xebec_secsize;
+    memset(state.buf, 0, sizeof(state.buf));
     memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
