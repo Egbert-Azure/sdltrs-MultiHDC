@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 2.8.5...3.13)
 
 project(sdl2trs C)
 
+# MultiHDC version: single source of truth is version.txt
+file(READ "${CMAKE_SOURCE_DIR}/version.txt" MULTIHDC_VERSION)
+string(STRIP "${MULTIHDC_VERSION}" MULTIHDC_VERSION)
+configure_file(
+        "${CMAKE_SOURCE_DIR}/src/version.h.in"
+        "${CMAKE_BINARY_DIR}/version.h"
+        @ONLY
+)
+include_directories("${CMAKE_BINARY_DIR}")
+
 include(GNUInstallDirs)
 include(TestBigEndian)
 

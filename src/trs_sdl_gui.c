@@ -42,6 +42,7 @@
 #endif
 #include <SDL.h>
 
+#include "version.h"
 #include "error.h"
 #include "trs.h"
 #include "trs_cassette.h"
@@ -2692,11 +2693,12 @@ void gui_about(void)
   gui_clear();
   gui_write(" About ", 0, 0, 4);
   gui_write("SDL2TRS", 0, 3, 4);
-  gui_write("Version 1.2.35", 0, 4, 4);
+  gui_write("SDL2TRS-MultiHDC " MULTIHDC_VERSION, 0, 4, 4);
   gui_write("BSD 2-Clause License", 0, 5, 4);
   gui_write("Copyright (C) 2006-2011 Mark Grebe, 2018-2026", 0, 6, 4);
   gui_write("Alan Cox, Jens Guenther, Leonardo Brondani Schenkel", 0, 7, 4);
   gui_write("<https://gitlab.com/jengun/sdltrs>", 0, 8, 4);
+  gui_write("MultiHDC (C) 2025-2026 Egbert H. Schroeer", 0, 9, 4);
   gui_write("Based on xtrs 4.9d by Tim Mann", 0, 10, 4);
   gui_write("<http://www.tim-mann.org/xtrs>", 0, 11, 4);
   gui_write("xtrs 1.0 Copyright (C) 1992 Clarendon Hill Software", 0, 12, 4);
