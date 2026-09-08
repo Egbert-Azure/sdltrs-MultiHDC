@@ -1,7 +1,6 @@
 build/
 src ST 225/
 logs/
-.vscode/
 .DS_Store
 sdl2trs-omti.command
 push.command
