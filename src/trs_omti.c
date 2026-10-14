@@ -481,6 +481,12 @@ static int omti_open(int drive)
    * it with a 256/512/1024 jumper, so this emulator models it the same
    * way, with trs_omti_secsize rather than trying to infer a size from
    * the image file. */
+  if (trs_omti_secsize != 256 && trs_omti_secsize != 512
+      && trs_omti_secsize != 1024) {
+    error("trs_omti: bad sector size %d, using %d",
+          trs_omti_secsize, OMTI_DEFAULT_SECSIZE);
+    trs_omti_secsize = OMTI_DEFAULT_SECSIZE;
+  }
   state.secsize = trs_omti_secsize;
 
   state.status = TRS_OMTI_IDLE;
