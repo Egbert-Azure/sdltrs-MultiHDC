@@ -303,6 +303,15 @@ static void omti_command(void)
     if (omti_seek(state.lun, cyl, head, sector) == 0) {
       FILE *f = hard_slot[state.lun].file;
 
+      /* Unlike a plain seek, a format past the last cylinder would grow
+       * the image file. */
+      if (hard_slot[state.lun].cyls > 0 && cyl >= hard_slot[state.lun].cyls) {
+        error("omti%d: format at cyl:%d is beyond the drive (%d cyls)",
+            state.lun, cyl, hard_slot[state.lun].cyls);
+        omti_finish(-1);
+        break;
+      }
+
       if (f && fwrite(state.fillbuf, 1, state.secsize, f) != (size_t)state.secsize) {
         if (errno) {
           file_error("formatting omti%d", state.lun);
@@ -465,9 +474,8 @@ static int omti_seek(int lun, int cyl, int head, int sector)
 
 /*
  * Open (if needed) the image for a drive, parse its Reed header, and
- * derive geometry.  Also derives the controller's sector size from the
- * file's data size and that geometry, since this protocol (unlike
- * WD1000/1010) has no live sector-size register.
+ * derive geometry.  The sector size comes from trs_omti_secsize, since
+ * this protocol (unlike WD1000/1010) has no live sector-size register.
  */
 static int omti_open(int drive)
 {
