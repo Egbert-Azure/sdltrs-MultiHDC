@@ -38,7 +38,7 @@ Under real GDOS 2.4: `PD 5` and `PD 6` return drive data, `HDFORMAT` completes b
 - Drive caps follow each controller's real maximum: WD1000 = 4 (2-bit SDH drive field), OMTI and Xebec = 2 (1-bit SASI LUN).
 - Config and CLI: hard-disk slots are controller-free — `hard0`..`hard3` (`-hard0`..`-hard3`). The legacy `-omti<n>`/`-xebec<n>` flags still map to the same slots, and `hardcontroller=` is accepted and ignored.
 
-**A note on the layering.** Upstream sdltrs has adopted this code with a different architecture: the controllers are merged into `trs_hard.c`. That is a personal preference. It neither saves code nor makes things simpler. I think one file per controller on a shared image layer is the right call for a reliable software architecture: the protocols stay separate and the code stays easy to maintain.
+**A note on the layering** (10/14/2026): Upstream sdltrs has adopted this code with a different architecture: the controllers are merged into `trs_hard.c`. That is a personal preference. It neither saves code nor makes things simpler. I think one file per controller on a shared image layer is the right call for a reliable software architecture: the protocols stay separate and the code stays easy to maintain.
 
 ## Boot ROMs
 
