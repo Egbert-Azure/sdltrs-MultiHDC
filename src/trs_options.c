@@ -735,7 +735,7 @@ static void opt_intval(const char *arg, int intarg, int *variable)
       else
         error("xebecsecsize must be 256 or 512");
       break;
-    case 11: /* omtisecsize: the real OMTI 5527's 256/512/1024 jumper */
+    case 11: /* omtisecsize: sector size setting, 256, 512 or 1024 */
       if (value == 256 || value == 512 || value == 1024)
         trs_omti_secsize = value;
       else

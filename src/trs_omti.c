@@ -41,10 +41,10 @@
  *
  * Disk images use the same 256-byte Reed header (reed.h) as trs_hard.c's
  * WD1000/1010 images.  Unlike WD1010, this protocol has no live
- * sector-size register: real hardware fixes it with the OMTI 5527's
- * 256/512/1024 jumper, so this emulator models it the same way, with
- * trs_omti_secsize (default 512, the size the ST-506/MFM drives it was
- * paired with, e.g. the Seagate ST225, used) settable via -omtisecsize.
+ * sector-size register.  Jumpers W1 through W4 define a specific type
+ * of hard disk drive; they do not set a sector size.  The size is an
+ * emulator setting, trs_omti_secsize (default 512, which is what
+ * HDNDF.Z80 formats with), settable via -omtisecsize.
  */
 
 #include <errno.h>
@@ -191,9 +191,10 @@ int trs_omti_in(int port)
       break;
     case TRS_OMTI_SELECT:
       /* The hd2.mac driver only writes here, to strobe SELECT.  Reading
-       * returns the W1-W4 jumpers, which define the drive type; the
-       * boot EPROM reads them at reset.  0xFA is IN OUT IN OUT, the
-       * 612 cylinder, 2 head entry in the SMS guide (Table 1-1). */
+       * returns jumpers W1 through W4, which define a specific type of
+       * hard disk drive; the boot EPROM reads them at reset.  0xFA is
+       * IN OUT IN OUT, the 612 cylinder, 2 head entry in the SMS guide
+       * (Table 1-1). */
       v = 0xfa;
       break;
     case TRS_OMTI_MASK:

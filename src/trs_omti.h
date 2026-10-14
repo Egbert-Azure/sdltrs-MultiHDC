@@ -39,11 +39,11 @@
 #define _TRS_OMTI_H
 
 /*
- * Sector size in bytes, the OMTI 5527's 256/512/1024 jumper. Read at
- * poweron by trs_omti_init(); changing it takes effect on the next
- * reset, same as moving a physical jumper would. Defaults to 512,
- * the size the ST-506/MFM drives (e.g. the Seagate ST225) it was
- * paired with used; -omtisecsize overrides it.
+ * Sector size in bytes.  An emulator setting: jumpers W1 through W4
+ * define a specific type of hard disk drive, none of them selects a
+ * sector size.  Taken when a drive image is opened (power-on, attach).
+ * Defaults to 512, which is what HDNDF.Z80 formats with; -omtisecsize
+ * overrides it.
  */
 extern int   trs_omti_secsize;
 
