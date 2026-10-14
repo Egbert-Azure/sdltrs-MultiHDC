@@ -190,10 +190,10 @@ int trs_omti_in(int port)
       v = state.status;
       break;
     case TRS_OMTI_SELECT:
-      /* Not used by the CP/M BIOS driver (hd2.mac), which only ever
-       * writes here to strobe SELECT. But the OMTI boot EPROM reads
-       * this port at reset to detect card presence and expects a
-       * fixed 0xFA signature byte back before it will proceed. */
+      /* The hd2.mac driver only writes here, to strobe SELECT.  Reading
+       * returns the W1-W4 jumpers, which define the drive type; the
+       * boot EPROM reads them at reset.  0xFA is IN OUT IN OUT, the
+       * 612 cylinder, 2 head entry in the SMS guide (Table 1-1). */
       v = 0xfa;
       break;
     case TRS_OMTI_MASK:
@@ -305,8 +305,7 @@ static void omti_command(void)
     if (omti_seek(state.lun, cyl, head, sector) == 0) {
       FILE *f = hard_slot[state.lun].file;
 
-      /* Unlike a plain seek, a format past the last cylinder would grow
-       * the image file. */
+      /* A format past the last cylinder would grow the image file. */
       if (hard_slot[state.lun].cyls > 0 && cyl >= hard_slot[state.lun].cyls) {
         error("omti%d: format at cyl:%d is beyond the drive (%d cyls)",
             state.lun, cyl, hard_slot[state.lun].cyls);

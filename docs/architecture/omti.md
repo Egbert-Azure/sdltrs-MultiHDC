@@ -2,13 +2,13 @@
 
 # OMTI 5527 controller emulation
 
-This describes `src/trs_omti.c` / `trs_omti.h`, the OMTI 5527-class SASI/MFM hard-disk-controller emulation added by this fork. If you're debugging a boot, read, or write problem on Holte's CP/M 3.0, start here for the protocol.
+This describes `src/trs_omti.c` / `trs_omti.h`, the OMTI 5520/5527-class SASI controller emulation (MFM drives) added by this fork. If you're debugging a boot, read, or write problem on Holte's CP/M 3.0, start here for the protocol.
 
 For what this backend shares with the other two, see [`controller-abstraction.md`](controller-abstraction.md). For where the protocol facts came from, see [`../archaeology/recovered-source.md`](../archaeology/recovered-source.md).
 
 ## What it emulates
 
-A TCS Genie IIIs can carry an OMTI 5527 SASI/MFM hard-disk controller card, typically driving a Seagate ST225 or similar, mapped at Z80 I/O ports 0x40–0x43. This range is OMTI-exclusive: the Xebec is reached only at `0x00`–`0x02`, and the WD1000's registers sit at `0x50`–`0x57` on this machine. All three answer on their own ports whenever a disk is attached, and they read and write the same slots. The protocol was reverse-engineered from Thomas Holte's real CP/M 3.0 BIOS driver (`hd2.mac`) and boot-loader source (`ldrbiohd.mac`), not from official OMTI documentation. All based on notes in modified src codes of the Holte CP/M 3.0
+A TCS Genie IIIs can carry an OMTI 5520/5527-class SASI controller card, typically driving a Seagate ST225 or similar, mapped at Z80 I/O ports 0x40–0x43. This range is OMTI-exclusive: the Xebec is reached only at `0x00`–`0x02`, and the WD1000's registers sit at `0x50`–`0x57` on this machine. All three answer on their own ports whenever a disk is attached, and they read and write the same slots. The protocol was reverse-engineered from Thomas Holte's real CP/M 3.0 BIOS driver (`hd2.mac`) and boot-loader source (`ldrbiohd.mac`), not from official OMTI documentation. All based on notes in modified src codes of the Holte CP/M 3.0
 
 ## Which OMTI
 
@@ -22,7 +22,7 @@ identical installation, identical cabling (34-pin control, two 20-pin
 data), and a shared jumper and drive-table scheme. The parts differ in
 the encoding they drive onto the platter, not in how the host talks to
 them.
-[docs/reference/omti-5520-5527-guide-aug87.pdf], high confidence.
+[docs/reference/OMTI_5520_5527_Guide_Aug87.pdf], high confidence.
 
 **Observed on real hardware.** An MFM drive (Seagate ST-225) ran on the
 5527 in the original machine. The MFM/RLL split in the SMS literature
@@ -30,7 +30,8 @@ describes how the parts were marketed and certified, not a limit the
 board enforces. First-hand, ~1992.
 
 **Interpretation.** Encoding sits below the SASI command layer and is
-invisible to the host, so `src/trs_omti.c` — which impleinvisible to the host, so `sr only — is equally valid for a 5520. No claim is made
+invisible to the host, so `src/trs_omti.c`, which implements only the
+host-visible protocol, is equally valid for a 5520. No claim is made
 here about which drive was fitted at any particular stage; see the
 CalvaDOS stage chronology for that.
 
@@ -42,7 +43,7 @@ CalvaDOS stage chronology for that.
 | 0x41 (`TRS_OMTI_STATUS`) | R | Status register (see below) |
 | 0x41 (`TRS_OMTI_STATUS`) | W | Software reset — any write aborts to idle |
 | 0x42 (`TRS_OMTI_SELECT`) | W | SELECT strobe — begins a new command if idle |
-| 0x42 (`TRS_OMTI_SELECT`) | R | Card-presence signature; always reads `0xFA` (checked by the boot EPROM at reset, never used by `hd2.mac` itself) |
+| 0x42 (`TRS_OMTI_SELECT`) | R | Drive type jumpers W1-W4, always reads `0xFA` (IN OUT IN OUT: 612 cylinders, 2 heads in the SMS guide, Table 1-1). The boot EPROM reads it at reset; `hd2.mac` never does |
 | 0x43 (`TRS_OMTI_MASK`) | W | DMA/interrupt mask — stored but not otherwise emulated (no DMA/interrupts here) |
 
 ## Protocol:
