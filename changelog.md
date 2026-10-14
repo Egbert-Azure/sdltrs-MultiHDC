@@ -4,35 +4,21 @@
 
 ## 2026-10-14
 
-┌────────────────────────────────────────────────────────────────────┬─────────────────┐
-│                              what changed                          │  Fixed in       │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ Unreachable drive guard, unvalidated state in trs_hard_load()      │ cae8eda         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ File reopened on every call, shared across controllers             │ fc98487         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ One controller refusing an image wiped the shared slot             │ fc98487         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ Xebec's head cap of 4, not in the manual                           │ 87a23db         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ Divide-by-zero from header or save-file geometry                   │ fa37b69         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ 0/0 cylinders left at 0                                            │ 8ce4637         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ Drive 1 reported without its LUN bit                               │ ff6e823         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI sector size is a setting, not a jumper                        │ bbff403         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI REQUEST SENSE returns real data                               │ 6016117         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI FORMAT covers the whole disk                                  │ 6016117         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI answers opcodes 05 06 07 09 10 E0 E3 E4                       │ 6016117         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI port 0x42 is the drive type jumpers                           │ fec4b20         │
-├────────────────────────────────────────────────────────────────────┼─────────────────┤
-│ OMTI reference documents added                                     │ ccfe3c8         │
-└────────────────────────────────────────────────────────────────────┴─────────────────┘
+| What changed | Fixed in |
+|---|---|
+| Unreachable drive guard, unvalidated state in trs_hard_load() | cae8eda |
+| File reopened on every call, shared across controllers | fc98487 |
+| One controller refusing an image wiped the shared slot | fc98487 |
+| Xebec's head cap of 4, not in the manual | 87a23db |
+| Divide-by-zero from header or save-file geometry | fa37b69 |
+| 0/0 cylinders left at 0 | 8ce4637 |
+| Drive 1 reported without its LUN bit | ff6e823 |
+| OMTI sector size is a setting, not a jumper | bbff403 |
+| OMTI REQUEST SENSE returns real data | 6016117 |
+| OMTI FORMAT covers the whole disk | 6016117 |
+| OMTI answers opcodes 05 06 07 09 10 E0 E3 E4 | 6016117 |
+| OMTI port 0x42 is the drive type jumpers | fec4b20 |
+| OMTI reference documents added | ccfe3c8 |
 
 ## 2026-07-25 — One set of hard-disk slots, no controller to pick (#6)
 
