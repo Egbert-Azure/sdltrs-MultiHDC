@@ -266,7 +266,10 @@ static void xebec_finish(int ok)
 {
   state.phase = XEBEC_PH_STATUS;
   state.status = XEBEC_STATUS_STATUS;
-  state.final_status = ok == 0 ? 0 : TRS_XEBEC_ST_ERROR;
+  /* Next-to-last status byte: error flag, with the drive's LUN in bit 5
+   * (manual, Figure 4-6). */
+  state.final_status = (ok == 0 ? 0 : TRS_XEBEC_ST_ERROR)
+                     | (state.lun << TRS_XEBEC_DCB1_LUNSHIFT);
   state.status_index = 0;
 }
 

@@ -26,7 +26,7 @@
  */
 
 /*
- * Emulation of the OMTI 5527-class SASI/MFM hard disk controller used
+ * Emulation of the OMTI 5520/5527-class SASI controller, MFM drives, used
  * in the TCS Genie IIIs, mapped at ports 0x40-0x43.  This is a separate,
  * independent hard disk interface from the Western Digital WD1000/WD1010
  * emulated in trs_hard.c (which the Genie IIIs also supports, relocated
@@ -245,7 +245,9 @@ static void omti_finish(int ok)
 {
   state.phase = OMTI_PH_STATUS;
   state.status = TRS_OMTI_STATUS_RDY;
-  state.final_status = ok == 0 ? 0 : TRS_OMTI_ST_ERROR;
+  /* Completion status: error flag, with the drive's LUN in bit 5. */
+  state.final_status = (ok == 0 ? 0 : TRS_OMTI_ST_ERROR)
+                     | (state.lun << TRS_OMTI_CDB1_LUNSHIFT);
 }
 
 static void omti_command(void)
