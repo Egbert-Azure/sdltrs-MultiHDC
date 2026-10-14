@@ -87,6 +87,8 @@ int hard_image_open(HardImage *d, int unit, const char *label,
  
   /* Number of cylinders from the header (0/0 means 256, per reed.h) */
   d->cyls = (rhh.cylhi << 8) | (rhh.cyllo & 0xff);
+  if (d->cyls == 0)
+    d->cyls = 256;
 
   secs = rhh.sec ? rhh.sec : 256;
   if (rhh.heads == 0) {
