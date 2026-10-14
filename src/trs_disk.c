@@ -64,6 +64,7 @@
 #include "trs_clones.h"
 #include "trs_disk.h"
 #include "trs_hard.h"
+#include "trs_hdctl.h"
 #include "trs_omti.h"
 #include "trs_stringy.h"
 #include "trs_state_save.h"
@@ -3789,7 +3790,7 @@ int trs_diskset_load(const char *filename)
     if (fgets(diskname, FILENAME_MAX, f) != NULL) {
       diskname[strcspn(diskname, "\r\n")] = 0;
       if (diskname[0])
-        trs_hard_attach(i, diskname);
+        hdctl_attach(i, diskname);
     }
   }
 

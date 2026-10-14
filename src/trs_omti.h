@@ -48,7 +48,7 @@
 extern int   trs_omti_secsize;
 
 extern void  trs_omti_init(int poweron);
-extern void  trs_omti_attach(int drive, const char *diskname);
+extern int   trs_omti_attach(int drive, const char *diskname);
 extern int   trs_omti_in(int port);
 extern void  trs_omti_out(int port, int value);
 

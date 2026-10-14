@@ -184,24 +184,22 @@ void trs_hard_init(int poweron)
     state.status = 0;
 
     for (i = 0; i < TRS_HARD_MAXDRIVES; i++) {
-      hard_slot[i].writeprot = 0;
-      hard_slot[i].cyls = 0;
-      hard_slot[i].heads = 0;
-      hard_slot[i].secs = 0;
-
+      hard_image_reset(i);
       hard_open(i);
     }
   }
 }
 
-void trs_hard_attach(int drive, const char *diskname)
+/* Returns 0 if this controller serves the image, -1 if it does not. */
+int trs_hard_attach(int drive, const char *diskname)
 {
-  snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
+  hard_image_set_name(drive, diskname);
 
-  if (hard_open(drive) == 0)
-    trs_impexp_xtrshard_attach(drive);
-  else
-    trs_hard_remove(drive);
+  if (hard_open(drive) != 0)
+    return -1;
+
+  trs_impexp_xtrshard_attach(drive);
+  return 0;
 
 }
 

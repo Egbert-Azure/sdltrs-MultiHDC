@@ -48,9 +48,24 @@ int hdctl_slot_wd1000_only(int unit)
  */
 void hdctl_attach(int unit, const char *filename)
 {
-  if (unit < TRS_HARD_MAXDRIVES)  trs_hard_attach(unit, filename);
-  if (unit < TRS_OMTI_MAXDRIVES)  trs_omti_attach(unit, filename);
-  if (unit < TRS_XEBEC_MAXDRIVES) trs_xebec_attach(unit, filename);
+  int served = 0;
+
+  if (unit < TRS_HARD_MAXDRIVES && trs_hard_attach(unit, filename) == 0)
+    served = 1;
+
+  /* An image that cannot be opened at all is closed and gone by now,
+   * and no other controller will do better with it.  One that a
+   * controller merely refuses (too many heads) stays open for the rest. */
+  if (hard_slot[unit].file != NULL) {
+    if (unit < TRS_OMTI_MAXDRIVES && trs_omti_attach(unit, filename) == 0)
+      served = 1;
+    if (unit < TRS_XEBEC_MAXDRIVES && trs_xebec_attach(unit, filename) == 0)
+      served = 1;
+  }
+
+  /* Nobody can address it: don't leave it in the slot. */
+  if (!served)
+    hard_slot_remove(unit);
 }
 
 void hdctl_remove(int unit)

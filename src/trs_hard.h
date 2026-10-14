@@ -35,7 +35,7 @@
 #define _TRS_HARD_H
 
 extern void  trs_hard_init(int poweron);
-extern void  trs_hard_attach(int drive, const char *diskname);
+extern int   trs_hard_attach(int drive, const char *diskname);
 extern void  trs_hard_remove(int drive);
 extern int   trs_hard_in(int port);
 extern void  trs_hard_out(int port, int value);

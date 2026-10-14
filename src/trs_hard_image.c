@@ -44,10 +44,9 @@ int hard_image_open(HardImage *d, int unit, const char *label,
   if (d->filename[0] == 0)
     goto fail;
 
-  if (d->file != NULL) {
-    fclose(d->file);
-    d->file = NULL;
-  }
+  /* Already open and decoded.  Only the head limit depends on who asks. */
+  if (d->file != NULL)
+    return d->heads > maxheads ? HARD_IMAGE_REFUSED : 0;
 
   /* First try opening for reading and writing */
   d->file = fopen(d->filename, "rb+");
@@ -102,11 +101,16 @@ int hard_image_open(HardImage *d, int unit, const char *label,
 
   /* secs is the divisor below, and d->secs is zero when the header has
    * more heads than sectors per cylinder. */
-  if (d->heads <= 0 || d->secs <= 0 || (secs % d->secs) != 0 ||
-      d->heads > maxheads) {
+  if (d->heads <= 0 || d->secs <= 0 || (secs % d->secs) != 0) {
     error("unusable geometry (%d heads/%d secs) in %s%d image: '%s'",
           d->heads, d->secs, label, unit, d->filename);
     goto fail;
+  }
+
+  if (d->heads > maxheads) {
+    error("%s%d: %d heads is more than this controller addresses (%d): '%s'",
+          label, unit, d->heads, maxheads, d->filename);
+    return HARD_IMAGE_REFUSED;
   }
 
   return 0;
@@ -116,6 +120,30 @@ fail:
   d->file = NULL;
   d->filename[0] = 0;
   return -1;
+}
+
+void hard_image_set_name(int drive, const char *name)
+{
+  HardImage *d = &hard_slot[drive];
+
+  if (d->file != NULL && strcmp(d->filename, name) != 0)
+    hard_slot_remove(drive);
+
+  snprintf(d->filename, FILENAME_MAX, "%s", name);
+}
+
+void hard_image_reset(int drive)
+{
+  HardImage *d = &hard_slot[drive];
+
+  if (d->file != NULL)
+    fclose(d->file);
+
+  d->file = NULL;
+  d->writeprot = 0;
+  d->cyls = 0;
+  d->heads = 0;
+  d->secs = 0;
 }
 
 void hard_slot_remove(int drive)

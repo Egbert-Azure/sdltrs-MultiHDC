@@ -61,7 +61,8 @@
 #define OMTIDEBUG2 (1 << 3)  /* show all commands */
 
 #define OMTI_SEC_PER_TRK 32     /* fallback if the header omits head count */
-#define OMTI_MAXHEADS 8
+/* 16 heads per Micro House; the SMS guide's drive tables go up to 15. */
+#define OMTI_MAXHEADS 16
 #define OMTI_DEFAULT_SECSIZE 512
 #define OMTI_SECBUFSIZE 1024
 
@@ -171,22 +172,18 @@ void trs_omti_init(int poweron)
     memset(state.fillbuf, 0xe5, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_OMTI_MAXDRIVES; i++) {
-      hard_slot[i].writeprot = 0;
-      hard_slot[i].cyls = 0;
-      hard_slot[i].heads = 0;
-      hard_slot[i].secs = 0;
-
+      hard_image_reset(i);
       omti_open(i);
     }
   }
 }
 
-void trs_omti_attach(int drive, const char *diskname)
+/* Returns 0 if this controller serves the image, -1 if it does not. */
+int trs_omti_attach(int drive, const char *diskname)
 {
-  snprintf(hard_slot[drive].filename, FILENAME_MAX, "%s", diskname);
+  hard_image_set_name(drive, diskname);
 
-  if (omti_open(drive) != 0)
-    hard_slot_remove(drive);
+  return omti_open(drive) == 0 ? 0 : -1;
 }
 
 /* Read from an I/O port mapped to the controller */

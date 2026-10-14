@@ -72,13 +72,37 @@ extern int hard_image_present(void);
  *   sec_per_trk - assumed sectors/track when the header omits a head count.
  *   maxheads    - upper bound accepted for the decoded head count.
  *
- * On success returns 0 with d fully populated (d->file open).  On failure
- * closes the file, clears d->filename, and returns -1; the caller is
- * responsible for any controller-specific error state (e.g. WD1000's
- * error register).
+ * An image that is already open is not opened again: the file and its
+ * geometry are kept, so a controller polling its drives does not reset the
+ * file position another one is relying on.  To open a different image, or
+ * to decode the header again, close it first (hard_slot_remove(),
+ * hard_image_reset()).
+ *
+ * Returns 0 with d fully populated (d->file open).  Returns
+ * HARD_IMAGE_REFUSED if the image is fine but has more heads than this
+ * controller addresses; the image stays open for the other controllers.
+ * Returns -1 if the image cannot be used by anyone: the file is closed
+ * and d->filename cleared.  The caller is responsible for any
+ * controller-specific error state (e.g. WD1000's error register).
  */
+#define HARD_IMAGE_REFUSED 1
+
 extern int hard_image_open(HardImage *d, int unit, const char *label,
                            int sec_per_trk, int maxheads);
+
+/*
+ * Make the slot refer to the image called name.  An open image of another
+ * name is closed first; the same name is left open as it is, so several
+ * controllers can be attached to one image in a row.
+ */
+extern void hard_image_set_name(int drive, const char *name);
+
+/*
+ * Forget the decoded header (close the file, zero the write-protect flag
+ * and the geometry) but keep the file name, so that the next
+ * hard_image_open() decodes it again.  For controller power-on.
+ */
+extern void hard_image_reset(int drive);
 
 /*
  * Close (if open) and clear the slot: filename, file handle, write-protect
