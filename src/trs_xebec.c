@@ -101,7 +101,6 @@ typedef struct {
   int lun;
 
   Uint8 buf[XEBEC_SECBUFSIZE];
-  Uint8 fillbuf[XEBEC_SECBUFSIZE];
   int bytesdone;
   int datalen;
   int secsize;
@@ -177,7 +176,6 @@ void trs_xebec_init(int poweron)
 
     state.secsize = trs_xebec_secsize;
     memset(state.buf, 0, sizeof(state.buf));
-    memset(state.fillbuf, TRS_XEBEC_FORMAT_FILL, sizeof(state.fillbuf));
 
     for (i = 0; i < TRS_XEBEC_MAXDRIVES; i++) {
       hard_slot[i].writeprot = 0;
@@ -330,6 +328,7 @@ static long xebec_capacity(int lun)
 static int xebec_format(int lun, long lba, int to_end_of_drive)
 {
   HardImage *d = &hard_slot[lun];
+  Uint8 fill[XEBEC_SECBUFSIZE];
   const Uint8 *pattern;
   long first, last, blk;
 
@@ -348,10 +347,12 @@ static int xebec_format(int lun, long lba, int to_end_of_drive)
   if (last > xebec_capacity(lun))
     last = xebec_capacity(lun);
 
+  memset(fill, TRS_XEBEC_FORMAT_FILL, sizeof(fill));
+
   /* Control byte bit 5: format with the buffer the host loaded via
    * WRITE SECTOR BUFFER rather than the controller's own fill byte. */
   pattern = (state.dcb[TRS_XEBEC_DCB_CONTROL] & TRS_XEBEC_CTRL_KEEPBUF)
-          ? state.buf : state.fillbuf;
+          ? state.buf : fill;
 
   /* Blocks are contiguous in the image, so one seek covers the range. */
   if (xebec_seek(lun, first) != 0)
@@ -700,6 +701,7 @@ static int xebec_open(int drive)
 void trs_xebec_save(FILE *file)
 {
   int phase = (int)state.phase;
+  Uint8 pad[XEBEC_SECBUFSIZE];
 
   trs_save_int(file, &phase, 1);
   trs_save_uint8(file, &state.status, 1);
@@ -708,7 +710,9 @@ void trs_xebec_save(FILE *file)
   trs_save_uint8(file, &state.command, 1);
   trs_save_int(file, &state.lun, 1);
   trs_save_uint8(file, state.buf, XEBEC_SECBUFSIZE);
-  trs_save_uint8(file, state.fillbuf, XEBEC_SECBUFSIZE);
+  /* Unused slot, kept so the save file layout doesn't change. */
+  memset(pad, TRS_XEBEC_FORMAT_FILL, sizeof(pad));
+  trs_save_uint8(file, pad, XEBEC_SECBUFSIZE);
   trs_save_int(file, &state.bytesdone, 1);
   trs_save_int(file, &state.datalen, 1);
   trs_save_int(file, &state.secsize, 1);
@@ -721,6 +725,7 @@ void trs_xebec_save(FILE *file)
 void trs_xebec_load(FILE *file)
 {
   int phase;
+  Uint8 pad[XEBEC_SECBUFSIZE];
 
   trs_load_int(file, &phase, 1);
   state.phase = (XebecPhase)phase;
@@ -730,7 +735,7 @@ void trs_xebec_load(FILE *file)
   trs_load_uint8(file, &state.command, 1);
   trs_load_int(file, &state.lun, 1);
   trs_load_uint8(file, state.buf, XEBEC_SECBUFSIZE);
-  trs_load_uint8(file, state.fillbuf, XEBEC_SECBUFSIZE);
+  trs_load_uint8(file, pad, XEBEC_SECBUFSIZE);  /* unused slot */
   trs_load_int(file, &state.bytesdone, 1);
   trs_load_int(file, &state.datalen, 1);
   trs_load_int(file, &state.secsize, 1);
@@ -739,4 +744,18 @@ void trs_xebec_load(FILE *file)
   trs_load_uint8(file, &state.final_status, 1);
   trs_load_int(file, &state.status_index, 1);
 
+  /* Don't let a bad save file index past the buffers. */
+  if (phase < XEBEC_PH_IDLE || phase > XEBEC_PH_STATUS
+      || state.dcb_index < 0 || state.dcb_index > TRS_XEBEC_DCBLEN
+      || (phase == XEBEC_PH_DCB && state.dcb_index >= TRS_XEBEC_DCBLEN)
+      || state.lun < 0 || state.lun >= TRS_XEBEC_MAXDRIVES
+      || !(state.secsize == 256 || state.secsize == 512)
+      || state.datalen < 0 || state.datalen > XEBEC_SECBUFSIZE
+      || state.bytesdone < 0 || state.bytesdone > state.datalen
+      || state.blocks < 0 || state.blocks > 256
+      || (state.status_index != 0 && state.status_index != 1)) {
+    error("trs_xebec: invalid controller state in save file, resetting");
+    trs_xebec_init(0);
+    state.secsize = trs_xebec_secsize;
+  }
 }

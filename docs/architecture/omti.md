@@ -121,6 +121,8 @@ There's no interleave or skew reordering, unlike floppy `.dmk` images, which do 
 
 Real OMTI format tooling (e.g. Volker Dose's `HDNDF.Z80`) stages a fill byte via `WRITE SECTOR BUFFER` (a normal 6-byte CDB plus one sector of data-out) before issuing `FORMAT TRACK`, which writes that staged pattern to the addressed sector. `state.fillbuf` holds the pattern. It defaults to `0xE5` (CP/M's empty-directory-entry marker) at power-on, so `FORMAT` behaves sanely even if a guest never loads a buffer first, and it's overwritten when `WRITE_SECTOR_BUFFER`'s data-out completes. `FORMAT` writes `state.fillbuf`, not a hardcoded pattern.
 
+**Differs from the hardware.** The real controller has one sector buffer shared by `READ`, `WRITE` and `FORMAT`, so a `READ` between the buffer load and the `FORMAT` replaces the pattern. Here the pattern survives. No known guest depends on the hardware behaviour.
+
 ## Write protection
 
 This backend's write paths never check the slot's write-protect flag themselves. Protection is enforced one layer down: `hard_image_open()` opens a protected image read-only, so `fwrite()` fails and the command returns an error status. The gap in the write paths was real (`77c95c8`) and is why the enforcement moved to the image layer for all three backends rather than being patched here. See [`../archaeology/design-decisions.md`](../archaeology/design-decisions.md).

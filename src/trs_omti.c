@@ -87,6 +87,9 @@ typedef struct {
   int lun;
 
   Uint8 buf[OMTI_SECBUFSIZE];
+  /* FORMAT pattern, copied from buf by WRITE SECTOR BUFFER.  The real
+   * controller has a single buffer, so a READ would overwrite the
+   * pattern.  Here it survives. */
   Uint8 fillbuf[OMTI_SECBUFSIZE];
   int bytesdone;
   int datalen;
@@ -522,4 +525,17 @@ void trs_omti_load(FILE *file)
   trs_load_int(file, &state.secsize, 1);
   trs_load_uint8(file, &state.final_status, 1);
 
+  /* Don't let a bad save file index past the buffers. */
+  if (phase < OMTI_PH_IDLE || phase > OMTI_PH_STATUS
+      || state.cdb_index < 0 || state.cdb_index > TRS_OMTI_CDBLEN
+      || (phase == OMTI_PH_CDB && state.cdb_index >= TRS_OMTI_CDBLEN)
+      || state.lun < 0 || state.lun >= TRS_OMTI_MAXDRIVES
+      || !(state.secsize == 256 || state.secsize == 512
+           || state.secsize == 1024)
+      || state.datalen < 0 || state.datalen > OMTI_SECBUFSIZE
+      || state.bytesdone < 0 || state.bytesdone > state.datalen) {
+    error("trs_omti: invalid controller state in save file, resetting");
+    trs_omti_init(0);
+    state.secsize = trs_omti_secsize;
+  }
 }
