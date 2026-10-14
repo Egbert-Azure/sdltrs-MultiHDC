@@ -96,6 +96,12 @@ typedef struct {
   int secsize;
   Uint8 final_status;
 
+  /* Latched for the next REQUEST SENSE, replaced by every other command.
+   * Not part of the save file. */
+  Uint8 sense_code;
+  int sense_valid;
+  int sense_lun, sense_cyl, sense_head, sense_sec;
+
 } State;
 
 static State state;
@@ -106,6 +112,9 @@ static int  omti_open(int drive);
 static int  omti_seek(int lun, int cyl, int head, int sector);
 static void omti_command(void);
 static void omti_finish(int ok);
+static void omti_fail(int code, int addr_valid);
+static void omti_done(int err);
+static int  omti_format(int lun, int cyl, int head, int sector, int to_end);
 static int  omti_data_in(void);
 static void omti_data_out(int value);
 
@@ -145,12 +154,16 @@ void trs_omti_init(int poweron)
   state.bytesdone = 0;
   state.datalen = 0;
   state.final_status = 0;
-  memset(state.buf, 0, sizeof(state.buf));
 
   if (poweron) {
     int i;
 
+    memset(state.buf, 0, sizeof(state.buf));
     state.mask = 0;
+    state.sense_code = 0;
+    state.sense_valid = 0;
+    state.sense_lun = state.sense_cyl = 0;
+    state.sense_head = state.sense_sec = 0;
     /* CP/M's directory-empty marker; real OMTI format tooling (e.g.
      * HDNDF.Z80) loads this same byte via WRITE SECTOR BUFFER before
      * issuing FORMAT, but this default lets FORMAT behave sanely even
@@ -251,6 +264,23 @@ static void omti_finish(int ok)
                      | (state.lun << TRS_OMTI_CDB1_LUNSHIFT);
 }
 
+/* Fail the current command and latch why, for REQUEST SENSE. */
+static void omti_fail(int code, int addr_valid)
+{
+  state.sense_code = (Uint8)code;
+  state.sense_valid = addr_valid;
+  omti_finish(-1);
+}
+
+/* Complete with the error code of a helper, or successfully if zero. */
+static void omti_done(int err)
+{
+  if (err)
+    omti_fail(err, err != TRS_OMTI_ERR_NOT_READY);
+  else
+    omti_finish(0);
+}
+
 static void omti_command(void)
 {
   int head, sector, cyl;
@@ -272,15 +302,29 @@ static void omti_command(void)
         state.command, state.lun, cyl, head, sector);
 #endif
 
+  /* Sense describes the command just completed, so every command but
+   * REQUEST SENSE itself replaces it. */
+  if (state.command != TRS_OMTI_REQUEST_SENSE) {
+    state.sense_code = 0;
+    state.sense_valid = 0;
+    state.sense_lun = state.lun;
+    state.sense_cyl = cyl;
+    state.sense_head = head;
+    state.sense_sec = sector;
+  }
+
   switch (state.command) {
-  case TRS_OMTI_READ:
-    if (omti_seek(state.lun, cyl, head, sector) == 0) {
+  case TRS_OMTI_READ: {
+    int err = omti_seek(state.lun, cyl, head, sector);
+
+    if (err == 0) {
       FILE *f = hard_slot[state.lun].file;
 
+      memset(state.buf, 0, state.secsize);  /* a short read leaves zeros */
       if (f && fread(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
         if (ferror(f)) {
           file_error("reading omti%d", state.lun);
-          omti_finish(-1);
+          omti_fail(TRS_OMTI_ERR_DATA, 1);
           break;
         }
       }
@@ -288,43 +332,32 @@ static void omti_command(void)
       state.phase = OMTI_PH_DATA_IN;
       state.status = TRS_OMTI_DATA_IN;
     } else {
-      omti_finish(-1);
+      omti_done(err);
     }
     break;
+  }
 
-  case TRS_OMTI_WRITE:
-    if (omti_seek(state.lun, cyl, head, sector) == 0) {
+  case TRS_OMTI_WRITE: {
+    int err = omti_seek(state.lun, cyl, head, sector);
+
+    if (err == 0) {
       state.datalen = state.secsize;
       state.phase = OMTI_PH_DATA_OUT;
       state.status = TRS_OMTI_DATA_OUT;
     } else {
-      omti_finish(-1);
+      omti_done(err);
     }
     break;
+  }
 
   case TRS_OMTI_FORMAT:
-    if (omti_seek(state.lun, cyl, head, sector) == 0) {
-      FILE *f = hard_slot[state.lun].file;
+    /* Format drive: from the given sector to the end of the disk. */
+    omti_done(omti_format(state.lun, cyl, head, sector, 1));
+    break;
 
-      /* A format past the last cylinder would grow the image file. */
-      if (hard_slot[state.lun].cyls > 0 && cyl >= hard_slot[state.lun].cyls) {
-        error("omti%d: format at cyl:%d is beyond the drive (%d cyls)",
-            state.lun, cyl, hard_slot[state.lun].cyls);
-        omti_finish(-1);
-        break;
-      }
-
-      if (f && fwrite(state.fillbuf, 1, state.secsize, f) != (size_t)state.secsize) {
-        if (errno) {
-          file_error("formatting omti%d", state.lun);
-          omti_finish(-1);
-          break;
-        }
-      }
-      omti_finish(0);
-    } else {
-      omti_finish(-1);
-    }
+  case TRS_OMTI_FORMAT_TRACK:
+  case TRS_OMTI_FORMAT_BAD_TRACK:
+    omti_done(omti_format(state.lun, cyl, head, sector, 0));
     break;
 
   case TRS_OMTI_SET_CHARACTERISTICS:
@@ -339,26 +372,55 @@ static void omti_command(void)
     state.status = TRS_OMTI_DATA_OUT;
     break;
 
+  case TRS_OMTI_READ_SECTOR_BUFFER:
+    /* The sector buffer as it is, no disk access. */
+    state.datalen = state.secsize;
+    state.phase = OMTI_PH_DATA_IN;
+    state.status = TRS_OMTI_DATA_IN;
+    break;
+
   case TRS_OMTI_SEEK:
-    omti_finish(omti_seek(state.lun, cyl, head, sector));
+  case TRS_OMTI_CHECK_TRACK:
+  case TRS_OMTI_READ_VERIFY:
+    /* A flat image has no ID fields to check and no data to hand over. */
+    omti_done(omti_seek(state.lun, cyl, head, sector));
     break;
 
   case TRS_OMTI_REZERO:
-    omti_finish(omti_seek(state.lun, 0, 0, 0));
+    omti_done(omti_seek(state.lun, 0, 0, 0));
     break;
 
   case TRS_OMTI_TEST_UNIT_READY:
-    omti_finish(hard_slot[state.lun].file != NULL ||
-                omti_open(state.lun) == 0 ? 0 : -1);
+    if (hard_slot[state.lun].file != NULL || omti_open(state.lun) == 0)
+      omti_finish(0);
+    else
+      omti_fail(TRS_OMTI_ERR_NOT_READY, 0);
+    break;
+
+  case TRS_OMTI_RAM_DIAGNOSTIC:
+  case TRS_OMTI_DRIVE_DIAGNOSTIC:
+  case TRS_OMTI_CTRL_DIAGNOSTIC:
+    /* Nothing in an emulator can fail these. */
+    omti_finish(0);
     break;
 
   case TRS_OMTI_REQUEST_SENSE:
-    omti_finish(0);
+    state.buf[0] = state.sense_code |
+        (state.sense_valid ? TRS_OMTI_SENSE_ADDRVALID : 0);
+    state.buf[1] = ((state.sense_cyl & 0x400) ? TRS_OMTI_CDB1_CYL10 : 0)
+                 | (state.sense_lun << TRS_OMTI_CDB1_LUNSHIFT)
+                 | (state.sense_head & TRS_OMTI_CDB1_HEADMASK);
+    state.buf[2] = (((state.sense_cyl >> 8) & 3) << TRS_OMTI_CDB2_CYLSHIFT)
+                 | (state.sense_sec & TRS_OMTI_CDB2_SECMASK);
+    state.buf[3] = state.sense_cyl & 0xff;
+    state.datalen = TRS_OMTI_SENSELEN;
+    state.phase = OMTI_PH_DATA_IN;
+    state.status = TRS_OMTI_DATA_IN;
     break;
 
   default:
     error("trs_omti: unknown command 0x%02X", state.command);
-    omti_finish(-1);
+    omti_fail(TRS_OMTI_ERR_BAD_CMD, 0);
     break;
   }
 }
@@ -382,7 +444,7 @@ static void omti_data_out(int value)
           if (f && fwrite(state.buf, 1, state.secsize, f) != (size_t)state.secsize) {
             if (errno) {
               file_error("writing omti%d", state.lun);
-              omti_finish(-1);
+              omti_fail(TRS_OMTI_ERR_WRITE_FAULT, 1);
               break;
             }
           }
@@ -441,13 +503,14 @@ static int omti_data_in(void)
  * Check whether the requested head/sector are in bounds and position the
  * file at the start of the requested sector.  Cylinder bounds are not
  * checked, matching trs_hard.c's hard_sector() (some drivers issue
- * harmlessly out-of-range seeks).  Returns 0 if OK, -1 otherwise.
+ * harmlessly out-of-range seeks).  Returns 0 if OK, else a
+ * TRS_OMTI_ERR_* code.
  */
 static int omti_seek(int lun, int cyl, int head, int sector)
 {
   HardImage *d = &hard_slot[lun];
 
-  if (d->file == NULL && omti_open(lun) != 0) return -1;
+  if (d->file == NULL && omti_open(lun) != 0) return TRS_OMTI_ERR_NOT_READY;
 
   /* Some drivers address sectors as a flat index across the whole
    * cylinder (0..heads*secs-1) rather than pre-splitting into head and
@@ -459,18 +522,62 @@ static int omti_seek(int lun, int cyl, int head, int sector)
   if (head >= d->heads) {
     error("omti%d: requested cyl:%d, head:%d, sec:%d (cyls:%d, heads:%d, secs:%d)",
         lun, cyl, head, sector, d->cyls, d->heads, d->secs);
-    return -1;
+    return TRS_OMTI_ERR_BAD_ADDR;
   }
 
   if (d->file && fseek(d->file,
       hard_image_offset(d, state.secsize, cyl, head, sector), 0) != 0) {
     file_error("omti%d: fseek '%s'", lun, d->filename);
-    return -1;
+    return TRS_OMTI_ERR_NOT_FOUND;
   }
 
   if (trs_show_led)
     trs_hard_led(lun, 1);
 
+  return 0;
+}
+
+/*
+ * Write the format pattern: from the given sector to the end of the
+ * disk (FORMAT), or over one track (FORMAT TRACK).  HDNDF.Z80 formats
+ * the whole drive with a single FORMAT at 0/0/0.  The pattern is what
+ * WRITE SECTOR BUFFER last loaded.  Returns 0, or a TRS_OMTI_ERR_* code.
+ */
+static int omti_format(int lun, int cyl, int head, int sector, int to_end)
+{
+  HardImage *d = &hard_slot[lun];
+  long count;
+  int err = omti_seek(lun, cyl, head, sector);
+
+  if (err)
+    return err;
+
+  /* A format past the last cylinder would grow the image file. */
+  if (d->cyls > 0 && cyl >= d->cyls) {
+    error("omti%d: format at cyl:%d is beyond the drive (%d cyls)",
+        lun, cyl, d->cyls);
+    return TRS_OMTI_ERR_BAD_ADDR;
+  }
+
+  count = d->secs;
+  if (d->cyls > 0) {
+    long total = (long)d->cyls * d->heads * d->secs;
+    long first = ((long)cyl * d->heads + head + sector / d->secs) * d->secs
+               + sector % d->secs;
+
+    if (to_end || count > total - first)
+      count = total - first;
+  }
+
+  while (count-- > 0) {
+    if (fwrite(state.fillbuf, 1, state.secsize, d->file)
+        != (size_t)state.secsize) {
+      file_error("formatting omti%d", lun);
+      return d->writeprot ? TRS_OMTI_ERR_WRITE_FAULT : TRS_OMTI_ERR_FORMAT;
+    }
+  }
+
+  fflush(d->file);
   return 0;
 }
 

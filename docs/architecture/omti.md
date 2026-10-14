@@ -91,15 +91,23 @@ Flat sector addressing: the compiled `hd2.mac` driver always sends head=0 in the
 |---|---|---|
 | 0x00 | `TEST_UNIT_READY` | Reports drive-present/ready (opens the image if not already open) |
 | 0x01 | `REZERO` | Seeks to cylinder 0/head 0/sector 0 |
-| 0x03 | `REQUEST_SENSE` | Acknowledged, no real sense data emulated |
-| 0x04 | `FORMAT` | Writes `state.fillbuf` (see below) to the addressed sector |
+| 0x03 | `REQUEST_SENSE` | Returns 4 bytes: error code (bit 7 = address valid), then the address of the failed command laid out like the CDB. Every other command replaces it. Not in the save file |
+| 0x05 | `CHECK_TRACK` | Seeks only; a flat image has no ID fields to check |
+| 0x04 | `FORMAT` | Format drive: writes `state.fillbuf` (see below) from the addressed sector to the end of the disk |
+| 0x06 | `FORMAT_TRACK` | Writes `state.fillbuf` over one track, from the addressed sector |
+| 0x07 | `FORMAT_BAD_TRACK` | Same as `FORMAT_TRACK`; a flat image has no bad-track flag |
+| 0x09 | `READ_VERIFY` | Seeks only, no data phase |
 | 0x08 | `READ` | Seeks, reads one sector from the image file into `state.buf`, enters `DATA_IN` |
 | 0x0a | `WRITE` | Seeks, enters `DATA_OUT`; on completion writes `state.buf` to the image file |
 | 0x0b | `SEEK` | Positions only, no data phase |
 | 0x0c | `SET_CHARACTERISTICS` | Acknowledged (8-byte payload consumed) but does not change addressing geometry (see "Geometry" below) |
 | 0x0f | `WRITE_SECTOR_BUFFER` | Stages a one-sector fill pattern into `state.fillbuf`, used by real format tooling (e.g. `HDNDF.Z80`) before issuing `FORMAT` |
+| 0x10 | `READ_SECTOR_BUFFER` | Returns `state.buf` as it is, no disk access |
+| 0xe0 / 0xe3 / 0xe4 | `RAM_DIAGNOSTIC` / `DRIVE_DIAGNOSTIC` / `CTRL_DIAGNOSTIC` | Complete successfully; nothing here can fail them |
 
-Anything else logs `"trs_omti: unknown command 0x%02X"` and returns an error status to the guest.
+Anything else logs `"trs_omti: unknown command 0x%02X"` and fails with error code 0x20 (invalid command).
+
+Opcodes 0x05, 0x06, 0x07, 0x09, 0x10 and 0xe0/0xe3/0xe4 are from the Xebec S1410A manual, as are the error codes (0x03 write fault, 0x04 not ready, 0x11 data error, 0x14 sector not found, 0x1a format error, 0x20 invalid command, 0x21 illegal address). The SMS guide confirms that the OMTI family runs the diagnostics, Test Drive Ready, Recalibrate and Initialize Drive Characteristics at start-up, but lists no opcodes.
 
 ## Geometry comes from the disk image, not the guest
 
@@ -120,7 +128,7 @@ There's no interleave or skew reordering, unlike floppy `.dmk` images, which do 
 
 ## FORMAT / WRITE_SECTOR_BUFFER and the fill pattern
 
-Real OMTI format tooling (e.g. Volker Dose's `HDNDF.Z80`) stages a fill byte via `WRITE SECTOR BUFFER` (a normal 6-byte CDB plus one sector of data-out) before issuing `FORMAT TRACK`, which writes that staged pattern to the addressed sector. `state.fillbuf` holds the pattern. It defaults to `0xE5` (CP/M's empty-directory-entry marker) at power-on, so `FORMAT` behaves sanely even if a guest never loads a buffer first, and it's overwritten when `WRITE_SECTOR_BUFFER`'s data-out completes. `FORMAT` writes `state.fillbuf`, not a hardcoded pattern.
+Real OMTI format tooling (e.g. Volker Dose's `HDNDF.Z80`) stages a fill byte via `WRITE SECTOR BUFFER` (a normal 6-byte CDB plus one sector of data-out) before issuing `FORMAT`, which writes that staged pattern from the addressed sector to the end of the disk. `HDNDF.Z80` does exactly this: `SET CHARACTERISTICS`, `WRITE SECTOR BUFFER` with 512 bytes of `0xE5`, then one `FORMAT` at 0/0/0 with control byte `0xC2`. `state.fillbuf` holds the pattern. It defaults to `0xE5` (CP/M's empty-directory-entry marker) at power-on, so `FORMAT` behaves sanely even if a guest never loads a buffer first, and it's overwritten when `WRITE_SECTOR_BUFFER`'s data-out completes. `FORMAT` writes `state.fillbuf`, not a hardcoded pattern.
 
 **Differs from the hardware.** The real controller has one sector buffer shared by `READ`, `WRITE` and `FORMAT`, so a `READ` between the buffer load and the `FORMAT` replaces the pattern. Here the pattern survives. No known guest depends on the hardware behaviour.
 

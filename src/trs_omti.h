@@ -86,6 +86,34 @@ extern void  trs_omti_out(int port, int value);
 #define TRS_OMTI_SET_CHARACTERISTICS 0x0c
 #define TRS_OMTI_WRITE_SECTOR_BUFFER 0x0f
 
+/* Commands of the same SASI set that this emulator also answers. */
+#define TRS_OMTI_CHECK_TRACK         0x05
+#define TRS_OMTI_FORMAT_TRACK        0x06
+#define TRS_OMTI_FORMAT_BAD_TRACK    0x07
+#define TRS_OMTI_READ_VERIFY         0x09
+#define TRS_OMTI_READ_SECTOR_BUFFER  0x10
+#define TRS_OMTI_RAM_DIAGNOSTIC      0xe0
+#define TRS_OMTI_DRIVE_DIAGNOSTIC    0xe3
+#define TRS_OMTI_CTRL_DIAGNOSTIC     0xe4
+
+/*
+ * REQUEST SENSE returns 4 bytes: error code (bit 7 = address valid),
+ * then the address of the failed command laid out like the CDB
+ * (cylinder bit 10 / LUN / head, cylinder bits 9-8 / sector, cylinder
+ * low).  The error codes are those of the Xebec S1410A manual; the byte
+ * layout is inferred, no OMTI document in the repo gives it.
+ */
+#define TRS_OMTI_SENSELEN        4
+#define TRS_OMTI_SENSE_ADDRVALID 0x80
+
+#define TRS_OMTI_ERR_WRITE_FAULT 0x03
+#define TRS_OMTI_ERR_NOT_READY   0x04
+#define TRS_OMTI_ERR_DATA        0x11
+#define TRS_OMTI_ERR_NOT_FOUND   0x14
+#define TRS_OMTI_ERR_FORMAT      0x1a
+#define TRS_OMTI_ERR_BAD_CMD     0x20
+#define TRS_OMTI_ERR_BAD_ADDR    0x21
+
 /* Final status byte (read from TRS_OMTI_PORT once status is 0xCF) */
 #define TRS_OMTI_ST_ERROR 0x02
 
