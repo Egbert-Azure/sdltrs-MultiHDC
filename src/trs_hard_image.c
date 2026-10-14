@@ -100,7 +100,10 @@ int hard_image_open(HardImage *d, int unit, const char *label,
     d->secs  = secs / d->heads;
   }
 
-  if ((secs % d->secs) != 0 || d->heads <= 0 || d->heads > maxheads) {
+  /* secs is the divisor below, and d->secs is zero when the header has
+   * more heads than sectors per cylinder. */
+  if (d->heads <= 0 || d->secs <= 0 || (secs % d->secs) != 0 ||
+      d->heads > maxheads) {
     error("unusable geometry (%d heads/%d secs) in %s%d image: '%s'",
           d->heads, d->secs, label, unit, d->filename);
     goto fail;
@@ -176,7 +179,18 @@ void hard_image_load(FILE *file)
 
     if (file_not_null == 0)
      continue;
- 
+
+    /* The geometry is a divisor in every seek, so don't take a zero or
+     * absurd one from the file.  Limits are what a Reed header can hold. */
+    if (d->heads < 1 || d->heads > 255 || d->secs < 1 || d->secs > 256 ||
+        d->cyls < 0 || d->cyls > 65535) {
+      error("load hard%d: bad geometry in save file, image dropped", i);
+      d->filename[0] = 0;
+      d->writeprot = 0;
+      d->cyls = d->heads = d->secs = 0;
+      continue;
+    }
+
     /* Reopen the image the saved state had open. Preserve a saved
      * write-protect state if the image was previously protected. */
     if (d->writeprot) {
