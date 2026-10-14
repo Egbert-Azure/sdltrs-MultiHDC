@@ -64,7 +64,10 @@
 #define XEBECDEBUG2 (1 << 5)  /* show all commands */
 
 #define XEBEC_SEC_PER_TRK 32     /* fallback if the header omits head count */
-#define XEBEC_MAXHEADS 4
+/* The manual's 4 is only the power-up default of INITIALIZE DRIVE
+ * CHARACTERISTICS; the controller addresses 8 heads, and more with the
+ * reduced write current line (section 4.1.4.3). */
+#define XEBEC_MAXHEADS 8
 #define XEBEC_SECBUFSIZE 512
 
 /*
