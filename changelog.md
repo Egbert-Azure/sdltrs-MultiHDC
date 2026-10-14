@@ -2,6 +2,26 @@
 
 # Changelog
 
+## 2026-10-14 
+┌────────────────────────────────────────────────────────────────────┬─────────────────┐
+│                              what changed                          │  Fixed in       │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ Unreachable drive guard, unvalidated state in trs_hard_load()      │ cae8eda         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ File reopened on every call, shared across controllers             │ fc98487         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ One controller refusing an image wiped the shared slot             │ fc98487         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ Xebec's head cap of 4, not in the manual                           │ 87a23db         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ Divide-by-zero from header or save-file geometry                   │ fa37b69         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ 0/0 cylinders left at 0                                            │ 8ce4637         │
+├────────────────────────────────────────────────────────────────────┼─────────────────┤
+│ Drive 1 reported without its LUN bit (found while reviewing the    │ ff6e823         │
+│ shared status path)                                                │                 │
+└────────────────────────────────────────────────────────────────────┴─────────────────┘
+
 ## 2026-07-25 — One set of hard-disk slots, no controller to pick (#6)
 
 Follow-on from the port-gating fix below. With the gate gone, the Controller

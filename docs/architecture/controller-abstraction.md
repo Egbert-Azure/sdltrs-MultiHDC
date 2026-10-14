@@ -4,7 +4,7 @@
 
 How the three hard-disk controller backends coexist in one emulated Genie IIIs. Read this before `omti.md`, `xebec.md` or `wd1000.md` — each of those describes one protocol, and this describes what they share.
 
-## The problem
+## Problem Statement
 
 A TCS Genie IIIs can be fitted with any of three hard-disk controllers, and this fork emulates all three:
 
