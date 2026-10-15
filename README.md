@@ -2,7 +2,7 @@
 
 # sdltrs-MultiHDC
 
-A TRS-80 / TCS Genie IIIs emulator that emulates three distinct hard-disk controllers: the OMTI 5527, the WD1000/1010, and the Xebec S1410 SASI. It derives from `sdltrsOMTI`, itself based on [SDL2TRS](https://gitlab.com/jengun/sdltrs) / xtrs. The tree was started fresh rather than forked, so upstream commit history is not preserved here — see the upstream projects for that. Per-file copyright headers and `AUTHORS.md` record which code came from where.
+A TRS-80 / TCS Genie IIIs emulator that emulates three distinct hard-disk controllers: the OMTI 5527, the WD1000/1010, and the Xebec S1410 SASI. It derives from `sdltrsOMTI`, itself based on [SDL2TRS](https://gitlab.com/jengun/sdltrs) / xtrs. The tree was started fresh rather than forked, so upstream commit history is not preserved here — see the upstream projects for that. Per-file copyright headers and `AUTHORS.md` record which code came from where. I spent a significant amount of time to make that MD file to document the components authorship because this amazing emulator has quite a history. And you can only create the future if you understand the history, right?
 
 The single remote is `origin` → [`github.com/Egbert-Azure/sdltrs-MultiHDC`](https://github.com/Egbert-Azure/sdltrs-MultiHDC). The GitHub repo was renamed from `sdltrsOMTI` and old URLs auto-redirect. Development happens on `main`.
 
@@ -39,7 +39,9 @@ Under real GDOS 2.4: `PD 5` and `PD 6` return drive data, `HDFORMAT` completes b
 - Config and CLI: hard-disk slots are controller-free — `hard0`..`hard3` (`-hard0`..`-hard3`). The legacy `-omti<n>`/`-xebec<n>` flags still map to the same slots, and `hardcontroller=` is accepted and ignored.
 
 > [!NOTE]
-> **A note on the layering** (10/14/2026): Upstream sdltrs has adopted this code with a different architecture: the controllers are merged into `trs_hard.c`. That is a personal preference. It neither saves code nor makes things simpler. I think one file per controller on a shared image layer is the right call for a reliable software architecture: the protocols stay separate and the code stays easy to maintain.
+> **A note on the layering** (2026-10-14): Upstream sdltrs now emulates the OMTI and Xebec controllers too, using the code of this repo, which is great to see. It merges them into `trs_hard.c` with one shared controller state. This fork keeps one file and one state per controller on top of a shared image layer. That is deliberate: the design is modular and reflects the hardware, where each controller is a separate board. It also makes the code easier to maintain and fix, because a fix to one controller can't change the behavior of another.
+>
+> One architecture gap remains in this repo: there is no single place where the controllers hook into the emulator. The fix would be a registration table: each controller fills in one struct of function pointers for init, port I/O, save state and debugging, and the emulator walks that table instead of calling each controller by name. The payoff is about a dozen fewer call sites and less risk of a new controller (which is unlikely, but who knows) being only half wired in.
 
 ## Boot ROMs
 
