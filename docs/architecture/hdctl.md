@@ -2,7 +2,7 @@
 
 # `trs_hdctl` — the hard-disk slot facade
 
-`src/trs_hdctl.c` / `.h` is a small file with one job: let the GUI, the config loader and the command line deal in **slot numbers alone**, and keep all three controller backends in step behind that. It is about 60 lines and should stay that way.
+`src/trs_hdctl.c` / `.h` is a small file with one job: let the GUI, the config loader and the command line deal in **slot numbers alone**, and keep all three controller backends in step behind that. It should stay small.
 
 For why it exists at all, and how it relates to the image layer underneath, read `controller-abstraction.md` first.
 
@@ -25,47 +25,93 @@ The user says "put this `.hdv` in slot 0". They do not also say which controller
 | `hdctl_getwriteprotect(unit)` | Write-protect flag, for display and toggling |
 | `hdctl_getgeometry(unit, &cyls, &heads, &secs)` | Decoded geometry, for display |
 
+## The slot helper
+
+Every call that takes a unit goes through one static helper:
+
+```c
+static HardImage *hdctl_slot(int unit)
+{
+  if (unit < 0 || unit >= HARD_IMAGE_SLOTS)
+    return NULL;
+  return &hard_slot[unit];
+}
+```
+
+It returns the slot for `0 <= unit < HARD_IMAGE_SLOTS`, otherwise `NULL`. The bound is `HARD_IMAGE_SLOTS` (4), not the OMTI/Xebec limit of 2. The SASI limit lives in each backend's own unit decode (see `../archaeology/design-decisions.md`), so the facade only has to keep `hard_slot[]` from being indexed out of range.
+
+A preprocessor check at the top of the file stops the build if `TRS_HARD_MAXDRIVES`, `TRS_OMTI_MAXDRIVES` or `TRS_XEBEC_MAXDRIVES` exceeds `HARD_IMAGE_SLOTS`. A backend that addressed more units than there are slots would index past the table.
+
 ## Two kinds of call, and why they differ
 
-The four **getters** read `hard_slot[]` directly:
+The three **getters** read the slot returned by the helper:
 
 ```c
 const char *hdctl_getfilename(int unit)
 {
-  return hard_slot[unit].filename;
+  const HardImage *slot = hdctl_slot(unit);
+
+  return slot ? slot->filename : "";
 }
 ```
 
-There is nothing to ask a backend. The image lives once, in the shared slot table, and its filename, write-protect flag and geometry are properties of the image — the same answer whichever controller you ask. OMTI and Xebec never had their own `_getfilename()`/`_getwriteprotect()`/`_getgeometry()` equivalents worth keeping and don't now; only the WD1000's `trs_hard_getfilename()` is still used directly, by `trs_disk.c` and `trs_imp_exp.c`. New code should call the `hdctl_` form.
+There is nothing to ask a backend. The image lives once, in the shared slot table, and its filename, write-protect flag and geometry are properties of the image, the same answer whichever controller you ask. For a bad unit `hdctl_getfilename()` returns `""`, `hdctl_getwriteprotect()` returns 0, and `hdctl_getgeometry()` leaves its output arguments unchanged. It also leaves them unchanged for a slot with no open image.
 
-**Attach** is a real fan-out — every backend that can reach the unit needs told, because each one caches its own open `FILE *` and decoded geometry, and skipping one would leave it holding a stale handle to a disk that is no longer there:
+OMTI and Xebec have no `_getfilename()`/`_getwriteprotect()`/`_getgeometry()` equivalents. Only the WD1000's `trs_hard_getfilename()` is still used directly, by `trs_disk.c` and `trs_imp_exp.c`. New code should call the `hdctl_` form.
+
+**Attach** is a real fan-out. Every backend that can reach the unit needs told, because each one caches its own open `FILE *` and decoded geometry, and skipping one would leave it holding a stale handle to a disk that is no longer there:
 
 ```c
 void hdctl_attach(int unit, const char *filename)
 {
-  if (unit < TRS_HARD_MAXDRIVES)  trs_hard_attach(unit, filename);
-  if (unit < TRS_OMTI_MAXDRIVES)  trs_omti_attach(unit, filename);
-  if (unit < TRS_XEBEC_MAXDRIVES) trs_xebec_attach(unit, filename);
+  HardImage *slot = hdctl_slot(unit);
+  int served = 0;
+
+  if (slot == NULL) {
+    error("no hard-disk slot %d for '%s'", unit, filename);
+    return;
+  }
+
+  if (unit < TRS_HARD_MAXDRIVES && trs_hard_attach(unit, filename) == 0)
+    served = 1;
+
+  /* An image that cannot be opened at all is closed and gone by now,
+   * and no other controller will do better with it.  One that a
+   * controller merely refuses (too many heads) stays open for the rest. */
+  if (slot->file != NULL) {
+    if (unit < TRS_OMTI_MAXDRIVES && trs_omti_attach(unit, filename) == 0)
+      served = 1;
+    if (unit < TRS_XEBEC_MAXDRIVES && trs_xebec_attach(unit, filename) == 0)
+      served = 1;
+  }
+
+  /* Nobody can address it: don't leave it in the slot. */
+  if (!served)
+    hard_slot_remove(unit);
 }
 ```
 
-The image itself is opened once by the image layer; what each backend needs told is *its own bookkeeping*.
+A bad unit is reported with `error()` and attach returns. Otherwise the image itself is opened once by the image layer, and what each backend needs told is its own bookkeeping. `served` records whether at least one backend accepted the image. If none did, the slot is cleared again.
 
-The `unit <` guards are the LUN limit, written as a comparison against each backend's own published cap rather than a hardcoded 2. `TRS_HARD_MAXDRIVES` is 4 (WD1000's two-bit SDH drive field); `TRS_OMTI_MAXDRIVES` and `TRS_XEBEC_MAXDRIVES` are 2 (1-bit SASI LUN). Change a cap in one of the controller headers and this file follows automatically.
+The `unit <` guards are the LUN limit, written as a comparison against each backend's own published cap rather than a hardcoded 2. `TRS_HARD_MAXDRIVES` is 4 (WD1000's two-bit SDH drive field). `TRS_OMTI_MAXDRIVES` and `TRS_XEBEC_MAXDRIVES` are 2 (1-bit SASI LUN). Change a cap in one of the controller headers and this file follows.
 
-**Remove is not a fan-out**, unlike attach — removal has no per-backend geometry/handle to update, only the shared slot to clear, plus one real side effect on the WD1000 side (the xtrshard import/export hook):
+**Remove is not a fan-out.** Removal has no per-backend geometry or handle to update, only the shared slot to clear, plus one real side effect on the WD1000 side (the xtrshard import/export hook). `trs_hard_remove()` does both, so every valid slot goes through it:
 
 ```c
 void hdctl_remove(int unit)
 {
-  if (unit < TRS_HARD_MAXDRIVES) {
+  /* trs_hard_remove() runs the xtrshard import/export hook and clears the
+   * shared slot, which is all removal needs for OMTI and Xebec too.
+   * Neither step depends on the WD1000's unit count, so every slot goes
+   * through it. */
+  if (hdctl_slot(unit) != NULL)
     trs_hard_remove(unit);
-    hard_slot_remove(unit);
-  }
 }
 ```
 
-OMTI and Xebec used to each have their own `trs_omti_remove()`/`trs_xebec_remove()`, but both were pure `{ hard_slot_remove(drive); }` pass-throughs with no backend-specific bookkeeping — removed as dead wrappers (#19). `TRS_HARD_MAXDRIVES` alone bounds every valid unit here since it equals `HARD_IMAGE_SLOTS`, the largest of the three caps (see `controller-abstraction.md`).
+`hdctl_remove()` checks the unit through the helper and does nothing for a bad one. It makes no `hard_slot_remove()` call of its own. That call is inside `trs_hard_remove()`.
+
+OMTI and Xebec used to each have their own `trs_omti_remove()`/`trs_xebec_remove()`, but both were pure `{ hard_slot_remove(drive); }` pass-throughs with no backend-specific bookkeeping. I removed them as dead wrappers (#19).
 
 `hdctl_slot_wd1000_only()` is the same idea inverted:
 
