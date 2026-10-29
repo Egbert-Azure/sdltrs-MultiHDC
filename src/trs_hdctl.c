@@ -20,6 +20,21 @@
 #include "trs_mkdisk.h"
 #include "trs_omti.h"
 #include "trs_xebec.h"
+#include "error.h"
+
+#if TRS_HARD_MAXDRIVES > HARD_IMAGE_SLOTS || \
+    TRS_OMTI_MAXDRIVES > HARD_IMAGE_SLOTS || \
+    TRS_XEBEC_MAXDRIVES > HARD_IMAGE_SLOTS
+#error "a controller addresses more units than there are hard-disk slots"
+#endif
+
+/* The slot for unit, or NULL if there is no such slot. */
+static HardImage *hdctl_slot(int unit)
+{
+  if (unit < 0 || unit >= HARD_IMAGE_SLOTS)
+    return NULL;
+  return &hard_slot[unit];
+}
 
 int hdctl_is_hard_type(int type)
 {
@@ -48,7 +63,13 @@ int hdctl_slot_wd1000_only(int unit)
  */
 void hdctl_attach(int unit, const char *filename)
 {
+  HardImage *slot = hdctl_slot(unit);
   int served = 0;
+
+  if (slot == NULL) {
+    error("no hard-disk slot %d for '%s'", unit, filename);
+    return;
+  }
 
   if (unit < TRS_HARD_MAXDRIVES && trs_hard_attach(unit, filename) == 0)
     served = 1;
@@ -56,7 +77,7 @@ void hdctl_attach(int unit, const char *filename)
   /* An image that cannot be opened at all is closed and gone by now,
    * and no other controller will do better with it.  One that a
    * controller merely refuses (too many heads) stays open for the rest. */
-  if (hard_slot[unit].file != NULL) {
+  if (slot->file != NULL) {
     if (unit < TRS_OMTI_MAXDRIVES && trs_omti_attach(unit, filename) == 0)
       served = 1;
     if (unit < TRS_XEBEC_MAXDRIVES && trs_xebec_attach(unit, filename) == 0)
@@ -72,27 +93,33 @@ void hdctl_remove(int unit)
 {
   /* trs_hard_remove() runs the xtrshard import/export hook and clears the
    * shared slot, which is all removal needs for OMTI and Xebec too.
-   * TRS_HARD_MAXDRIVES is HARD_IMAGE_SLOTS, the largest of the three
-   * (see trs_hard_image.h), so it bounds every valid unit. */
-  if (unit < TRS_HARD_MAXDRIVES)
+   * Neither step depends on the WD1000's unit count, so every slot goes
+   * through it. */
+  if (hdctl_slot(unit) != NULL)
     trs_hard_remove(unit);
 }
 
 const char *hdctl_getfilename(int unit)
 {
-  return hard_slot[unit].filename;
+  const HardImage *slot = hdctl_slot(unit);
+
+  return slot ? slot->filename : "";
 }
 
 int hdctl_getwriteprotect(int unit)
 {
-  return hard_slot[unit].writeprot;
+  const HardImage *slot = hdctl_slot(unit);
+
+  return slot ? slot->writeprot : 0;
 }
 
 void hdctl_getgeometry(int unit, int *cyls, int *heads, int *secs)
 {
-  if (hard_slot[unit].file) {
-    *cyls  = hard_slot[unit].cyls;
-    *heads = hard_slot[unit].heads;
-    *secs  = hard_slot[unit].secs;
+  const HardImage *slot = hdctl_slot(unit);
+
+  if (slot && slot->file) {
+    *cyls  = slot->cyls;
+    *heads = slot->heads;
+    *secs  = slot->secs;
   }
 }
