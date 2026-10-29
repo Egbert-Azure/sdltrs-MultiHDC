@@ -2,6 +2,18 @@
 
 # Changelog
 
+## 2026-10-29
+
+| What changed | Fixed in |
+|---|---|
+| hdctl_remove(-1) wrote outside hard_slot[] | b25f68f |
+| hdctl_slot() accepts 0 <= unit < HARD_IMAGE_SLOTS | b25f68f |
+| hdctl_attach reports a bad unit with error() and returns | b25f68f |
+| hdctl_remove goes through the same check | b25f68f |
+| Bad unit: getfilename returns "", getwriteprotect 0, getgeometry leaves its outputs unchanged | b25f68f |
+| Preprocessor check that the three controller caps do not exceed HARD_IMAGE_SLOTS | b25f68f |
+| No caller passes a bad unit today; boot traces of all five scenarios unchanged | b25f68f |
+
 ## 2026-10-14
 
 | What changed | Fixed in |
